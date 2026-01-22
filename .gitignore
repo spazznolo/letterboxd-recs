@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.cache/
+.cache_*/
+*.db
+*.sqlite
+*.sqlite3
+.cache_letterboxd/
+.cache/letterboxd/
+.cache/graph/
+.cache/availability/
+.cache/exports/
+.DS_Store

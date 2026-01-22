@@ -1,0 +1,27 @@
+[app]
+region = "CA"
+database_path = "letterboxd_recs.sqlite"
+cache_dir = ".cache"
+user_agent = "letterboxd-recs/0.1 (personal use)"
+
+[scrape]
+rate_limit_seconds = 2.0
+max_retries = 3
+cache_ttl_days = 7
+use_browser = true
+
+[graph]
+max_depth = 3
+decay = 0.5
+
+[weights]
+liked = 1.0
+rated = 0.8
+watched = 0.6
+watchlist = 0.4
+
+[blend]
+alpha_content = 0.6
+beta_social = 0.3
+gamma_novelty = 0.1
+delta_diversity = 0.0

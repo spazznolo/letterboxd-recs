@@ -1,0 +1,15 @@
+Setup notes
+
+1) Create and activate virtualenv
+   python -m venv .venv
+   source .venv/bin/activate
+
+2) Install project + Playwright
+   pip install -e . playwright
+   python -m playwright install
+
+3) Optional dev tools
+   pip install pytest
+
+Notes
+- Playwright installs browser binaries under ~/Library/Caches/ms-playwright on macOS.
