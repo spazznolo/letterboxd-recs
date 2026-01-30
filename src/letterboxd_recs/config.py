@@ -17,6 +17,7 @@ class ScrapeConfig:
     max_retries: int
     cache_ttl_days: int
     use_browser: bool
+    max_pages: int
 
 
 @dataclass(frozen=True)
@@ -42,12 +43,54 @@ class BlendConfig:
 
 
 @dataclass(frozen=True)
+class SocialConfig:
+    watched_weight: float
+    watchlist_weight: float
+    time_weight_min: float
+    time_weight_years: int
+
+
+@dataclass(frozen=True)
+class SocialRatingsConfig:
+    negative_min: float
+    negative_max: float
+    positive_min: float
+    positive_max: float
+    unrated: float
+    watchlist_multiplier: float
+
+
+@dataclass(frozen=True)
+class SocialSimilarityConfig:
+    jaccard_weight: float
+    rating_weight: float
+    rating_prior: float
+    rating_k: float
+    default_similarity: float
+    stretch_power: float
+    normalize_top: bool
+
+
+@dataclass(frozen=True)
+class SocialNormalizeConfig:
+    enabled: bool
+    followee_weight: float
+    similarity_weight: float
+    interaction_weight: float
+    time_weight: float
+
+
+@dataclass(frozen=True)
 class Config:
     app: AppConfig
     scrape: ScrapeConfig
     graph: GraphConfig
     weights: WeightsConfig
     blend: BlendConfig
+    social: SocialConfig
+    social_ratings: SocialRatingsConfig
+    social_similarity: SocialSimilarityConfig
+    social_normalize: SocialNormalizeConfig
 
     @property
     def database_path(self) -> str:
@@ -71,6 +114,10 @@ def load_config(path: Path | None = None) -> Config:
     graph = raw["graph"]
     weights = raw["weights"]
     blend = raw["blend"]
+    social = raw["social"]
+    social_ratings = raw["social_ratings"]
+    social_similarity = raw["social_similarity"]
+    social_normalize = raw["social_normalize"]
 
     return Config(
         app=AppConfig(**app),
@@ -78,4 +125,8 @@ def load_config(path: Path | None = None) -> Config:
         graph=GraphConfig(**graph),
         weights=WeightsConfig(**weights),
         blend=BlendConfig(**blend),
+        social=SocialConfig(**social),
+        social_ratings=SocialRatingsConfig(**social_ratings),
+        social_similarity=SocialSimilarityConfig(**social_similarity),
+        social_normalize=SocialNormalizeConfig(**social_normalize),
     )

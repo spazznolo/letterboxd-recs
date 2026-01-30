@@ -9,6 +9,7 @@ rate_limit_seconds = 2.0
 max_retries = 3
 cache_ttl_days = 7
 use_browser = true
+max_pages = 100
 
 [graph]
 max_depth = 3
@@ -25,3 +26,33 @@ alpha_content = 0.6
 beta_social = 0.3
 gamma_novelty = 0.1
 delta_diversity = 0.0
+
+[social]
+watched_weight = 1.0
+watchlist_weight = 0.5
+time_weight_min = 0.25
+time_weight_years = 25
+
+[social_normalize]
+enabled = true
+followee_weight = 1.0
+similarity_weight = 1.0
+interaction_weight = 1.0
+time_weight = 1.0
+
+[social_similarity]
+jaccard_weight = 0.6
+rating_weight = 0.4
+rating_prior = 0.5
+rating_k = 20
+default_similarity = 0.5
+stretch_power = 7.5
+normalize_top = true
+
+[social_ratings]
+negative_min = -1.0
+negative_max = -0.1
+positive_min = 0.1
+positive_max = 1.0
+unrated = 0.25
+watchlist_multiplier = 0.5

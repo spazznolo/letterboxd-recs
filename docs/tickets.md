@@ -19,11 +19,11 @@
 - [x] T1.6: Persist all user interactions into SQLite
 
 ## Sprint 2 — Social Graph Ingest
-- [ ] T2.1: Scrape followees list (pagination)
-- [ ] T2.2: Build BFS traversal to depth D with decay
-- [ ] T2.3: Ingest followees’ interactions (watched/liked/watchlist)
-- [ ] T2.4: Store graph edges in SQLite
-- [ ] T2.5: Add `--max-depth` and `--refresh` overrides to CLI
+- [x] T2.1: Scrape followees list (pagination)
+- [x] T2.2: Build BFS traversal to depth D with decay
+- [x] T2.3: Ingest followees’ interactions (watched/liked/watchlist)
+- [x] T2.4: Store graph edges in SQLite
+- [x] T2.5: Add `--max-depth` and `--refresh` overrides to CLI
 
 ## Sprint 3 — Film Metadata + Availability
 - [ ] T3.1: Scrape film metadata (genres, directors, cast, year)

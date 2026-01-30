@@ -109,3 +109,11 @@ Use this log to capture context, decisions, and next-step instructions as ticket
   Decisions: Use Playwright for Cloudflare/403 fallback and for refresh runs (browser-first when refresh=True); cache browser HTML.
   Gotchas: Full ingest is slow due to many pages; watchlist pagination dominates runtime.
   Next steps: Consider a `--max-pages` option or incremental sync to speed dev runs.
+
+- Ticket: T2.1–T2.5
+  Date: 2026-01-22
+  Summary: Implemented follow-graph ingest with pagination, BFS traversal, graph edge storage, and CLI options; added parser tests.
+  Files touched: src/letterboxd_recs/graph/ingest.py, src/letterboxd_recs/ingest/letterboxd/social.py, src/letterboxd_recs/db/repo.py, src/letterboxd_recs/cli.py, tests/test_graph.py
+  Decisions: Graph ingest uses BFS up to `max_depth`; optionally ingests followee interactions via existing ingest pipeline.
+  Gotchas: Graph ingest can be slow and heavy when ingesting interactions for many followees.
+  Next steps: Consider adding limits or batching controls for graph ingestion.

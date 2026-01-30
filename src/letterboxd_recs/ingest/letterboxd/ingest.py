@@ -35,7 +35,15 @@ class IngestResult:
     watchlist: int
 
 
-def ingest_user(username: str, cfg: Config, refresh: bool = False) -> IngestResult:
+def ingest_user(
+    username: str,
+    cfg: Config,
+    refresh: bool = False,
+    include_diary: bool = True,
+    include_films: bool = True,
+    include_likes: bool = True,
+    include_watchlist: bool = True,
+) -> IngestResult:
     ensure_db(cfg.database_path)
     cache_dir = Path(cfg.app.cache_dir) / "letterboxd" / username
     client = LetterboxdClient(cfg.app.user_agent, cfg.scrape, cache_dir)
@@ -55,10 +63,14 @@ def ingest_user(username: str, cfg: Config, refresh: bool = False) -> IngestResu
         user_id = repo.upsert_user(conn, profile)
         items = []
 
-        items.extend(_collect_diary(username, client, refresh))
-        items.extend(_collect_films(username, client, refresh))
-        items.extend(_collect_likes(username, client, refresh))
-        items.extend(_collect_watchlist(username, client, refresh))
+        if include_diary:
+            items.extend(_collect_diary(username, client, refresh))
+        if include_films:
+            items.extend(_collect_films(username, client, refresh))
+        if include_likes:
+            items.extend(_collect_likes(username, client, refresh))
+        if include_watchlist:
+            items.extend(_collect_watchlist(username, client, refresh))
 
         merged = merge_items(items)
         repo.upsert_interactions(conn, user_id, merged.values())
@@ -77,8 +89,16 @@ def _collect_diary(username: str, client: LetterboxdClient, refresh: bool) -> li
 
 
 def _collect_films(username: str, client: LetterboxdClient, refresh: bool) -> list:
-    url = _user_url(username, "films/")
-    return _collect_paginated(url, client, refresh, parse_films_list)
+    url = _user_url(username, "films/by/date/")
+    max_pages = 1 if refresh else client.scrape.max_pages
+    return _collect_paginated(
+        url,
+        client,
+        refresh,
+        parse_films_list,
+        max_pages=max_pages,
+        browser_first=client.scrape.use_browser and not refresh,
+    )
 
 
 def _collect_likes(username: str, client: LetterboxdClient, refresh: bool) -> list:
@@ -88,17 +108,41 @@ def _collect_likes(username: str, client: LetterboxdClient, refresh: bool) -> li
 
 def _collect_watchlist(username: str, client: LetterboxdClient, refresh: bool) -> list:
     url = _user_url(username, "watchlist/")
-    return _collect_paginated(url, client, refresh, parse_watchlist)
+    max_pages = 1 if refresh else client.scrape.max_pages
+    return _collect_paginated(
+        url,
+        client,
+        refresh,
+        parse_watchlist,
+        max_pages=max_pages,
+        browser_first=client.scrape.use_browser and not refresh,
+    )
 
 
-def _collect_paginated(url: str, client: LetterboxdClient, refresh: bool, parser) -> list:
+def _collect_paginated(
+    url: str,
+    client: LetterboxdClient,
+    refresh: bool,
+    parser,
+    max_pages: int | None = None,
+    browser_first: bool = False,
+) -> list:
     items = []
     page_url = url
     page = 1
     while page_url:
+        if max_pages is not None and page > max_pages:
+            LOG.info("Reached max_pages=%s for %s", max_pages, url)
+            break
         LOG.info("Scrape page %s", page_url)
         cache_key = client.cache_key(page_url)
-        html = _fetch_page(client, page_url, cache_key=cache_key, refresh=refresh)
+        html = _fetch_page(
+            client,
+            page_url,
+            cache_key=cache_key,
+            refresh=refresh,
+            browser_first=browser_first,
+        )
         if is_challenge_page(html):
             raise RuntimeError("Blocked by Cloudflare challenge while scraping.")
         items.extend(parser(html))
@@ -115,8 +159,14 @@ def _user_url(username: str, path: str | None = None) -> str:
     return f"{BASE_URL}/{username}/{path}"
 
 
-def _fetch_page(client: LetterboxdClient, url: str, cache_key: str, refresh: bool) -> str:
-    if refresh and client.scrape.use_browser:
+def _fetch_page(
+    client: LetterboxdClient,
+    url: str,
+    cache_key: str,
+    refresh: bool,
+    browser_first: bool = False,
+) -> str:
+    if client.scrape.use_browser:
         html = browser_fetch(url, user_agent=client.session.headers.get("User-Agent", "")).content
         client.write_cache(cache_key, html)
         return html

@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     display_name TEXT,
+    follower_count INTEGER,
+    following_count INTEGER,
+    watched_count INTEGER,
     fetched_at TEXT
 );
 
@@ -11,17 +14,18 @@ CREATE TABLE IF NOT EXISTS films (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     letterboxd_id TEXT UNIQUE,
     title TEXT NOT NULL,
-    year INTEGER
+    year INTEGER,
+    genres TEXT
 );
 
 CREATE TABLE IF NOT EXISTS interactions (
     user_id INTEGER NOT NULL,
     film_id INTEGER NOT NULL,
     rating REAL,
-    liked INTEGER DEFAULT 0,
-    watched INTEGER DEFAULT 0,
-    watchlist INTEGER DEFAULT 0,
-    watch_date TEXT,
+    liked BOOLEAN DEFAULT 0,
+    watched BOOLEAN DEFAULT 0,
+    watchlist BOOLEAN DEFAULT 0,
+    watch_date DATE,
     PRIMARY KEY (user_id, film_id),
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (film_id) REFERENCES films(id)
