@@ -38,16 +38,16 @@ def render_recs_html(
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang=\\"en\\">
+<html lang=\"en\">
   <head>
-    <meta charset=\\"UTF-8\\" />
-    <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\" />
+    <meta charset=\"UTF-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
     <title>Letterboxd Recs</title>
-    <link rel=\\"preconnect\\" href=\\"https://fonts.googleapis.com\\" />
-    <link rel=\\"preconnect\\" href=\\"https://fonts.gstatic.com\\" crossorigin />
+    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />
+    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />
     <link
-      href=\\"https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap\\"
-      rel=\\"stylesheet\\"
+      href=\"https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap\"
+      rel=\"stylesheet\"
     />
     <style>
       :root {
@@ -66,7 +66,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
       body {
         margin: 0;
-        font-family: \\"Space Grotesk\\", system-ui, sans-serif;
+        font-family: \"Space Grotesk\", system-ui, sans-serif;
         background: radial-gradient(circle at top left, #1a2531 0%, #0f141a 45%, #0b0f14 100%);
         color: var(--text);
         min-height: 100vh;
@@ -77,7 +77,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       h1 {
-        font-family: \\"Fraunces\\", serif;
+        font-family: \"Fraunces\", serif;
         font-weight: 700;
         font-size: clamp(28px, 5vw, 52px);
         margin: 0 0 8px;
@@ -151,7 +151,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       .rank {
-        font-family: \\"Fraunces\\", serif;
+        font-family: \"Fraunces\", serif;
         font-size: 26px;
         color: var(--accent);
       }
@@ -207,111 +207,140 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <body>
     <header>
       <h1>Letterboxd Recs</h1>
-      <div class=\\"subtitle\\" id=\\"subtitle\\"></div>
+      <div class=\"subtitle\" id=\"subtitle\"></div>
     </header>
 
-    <section class=\\"filters\\">
-      <div class=\\"filter-card\\">
-        <label for=\\"search\\">Search</label>
-        <input id=\\"search\\" placeholder=\\"Title contains...\\" />
+    <section class=\"filters\">
+      <div class=\"filter-card\">
+        <label for=\"search\">Search</label>
+        <input id=\"search\" placeholder=\"Title contains...\" />
       </div>
-      <div class=\\"filter-card\\">
-        <label for=\\"provider\\">Provider</label>
-        <select id=\\"provider\\"></select>
+      <div class=\"filter-card\">
+        <label for=\"provider\">Provider</label>
+        <select id=\"provider\"></select>
       </div>
-      <div class=\\"filter-card\\">
-        <label for=\\"genre\\">Genre</label>
-        <select id=\\"genre\\"></select>
+      <div class=\"filter-card\">
+        <label for=\"genre\">Genre</label>
+        <select id=\"genre\"></select>
       </div>
-      <div class=\\"filter-card\\">
-        <label for=\\"minYear\\">Min Year</label>
-        <input id=\\"minYear\\" type=\\"number\\" placeholder=\\"e.g. 2010\\" />
+      <div class=\"filter-card\">
+        <label for=\"minYear\">Min Year</label>
+        <input id=\"minYear\" type=\"number\" placeholder=\"e.g. 2010\" />
       </div>
-      <div class=\\"filter-card\\">
+      <div class=\"filter-card\">
         <label>Stream Only</label>
-        <div class=\\"toggle\\">
-          <input id=\\"streamOnly\\" type=\\"checkbox\\" />
+        <div class=\"toggle\">
+          <input id=\"streamOnly\" type=\"checkbox\" />
           <span>Require free stream/play</span>
         </div>
       </div>
     </section>
 
-    <section class=\\"content\\">
-      <div class=\\"grid\\" id=\\"grid\\"></div>
+    <section class=\"content\">
+      <div class=\"grid\" id=\"grid\"></div>
     </section>
 
+    <script id="recs-data" type="application/json">/*__DATA__*/</script>
     <script>
-      const data = /*__DATA__*/;
-      const subtitle = document.getElementById("subtitle");
-      subtitle.textContent = `Generated for ${data.username} on ${data.generated_at}`;
+      window.addEventListener("DOMContentLoaded", () => {
+        let data;
+        try {
+          const raw = document.getElementById("recs-data").textContent || "{}";
+          data = JSON.parse(raw);
+        } catch (err) {
+          console.error("Failed to parse recs data", err);
+          data = { username: "unknown", generated_at: "", providers: [], films: [] };
+        }
+        const subtitle = document.getElementById("subtitle");
+        if (subtitle) {
+          subtitle.textContent = `Generated for ${data.username} on ${data.generated_at}`;
+        }
 
-      const providerSelect = document.getElementById("provider");
-      const genreSelect = document.getElementById("genre");
-      const grid = document.getElementById("grid");
+        const providerSelect = document.getElementById("provider");
+        const genreSelect = document.getElementById("genre");
+        const grid = document.getElementById("grid");
+        if (!providerSelect || !genreSelect || !grid) {
+          console.error("Missing expected DOM elements for filters.");
+        }
 
-      const allGenres = new Set();
-      data.films.forEach((film) => {
-        film.genres.forEach((g) => allGenres.add(g));
-      });
-
-      const addOption = (select, value, label) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = label;
-        select.appendChild(option);
-      };
-
-      addOption(providerSelect, "", "All providers");
-      data.providers.forEach((p) => addOption(providerSelect, p, p.replace(/_/g, " ")));
-      addOption(genreSelect, "", "All genres");
-      [...allGenres].sort().forEach((g) => addOption(genreSelect, g, g));
-
-      const render = () => {
-        const search = document.getElementById("search").value.toLowerCase();
-        const provider = providerSelect.value;
-        const genre = genreSelect.value;
-        const minYear = parseInt(document.getElementById("minYear").value, 10);
-        const streamOnly = document.getElementById("streamOnly").checked;
-
-        const filtered = data.films.filter((film) => {
-          if (search && !film.title.toLowerCase().includes(search)) return false;
-          if (provider && !film.providers[provider]) return false;
-          if (genre && !film.genres.includes(genre)) return false;
-          if (!isNaN(minYear) && film.year && film.year < minYear) return false;
-          if (streamOnly && !film.stream) return false;
-          return true;
+        const allGenres = new Set();
+        data.films.forEach((film) => {
+          (film.genres || []).forEach((g) => allGenres.add(g));
         });
 
-        grid.innerHTML = "";
-        filtered.forEach((film, idx) => {
-          const card = document.createElement("div");
-          card.className = "card";
-          const providers = Object.entries(film.providers)
-            .filter(([_, v]) => v)
-            .map(([k]) => k.replace(/_/g, " "));
+        const addOption = (select, value, label) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          select.appendChild(option);
+        };
 
-          card.innerHTML = `
-            <div class="rank">${idx + 1}</div>
-            <div>
-              <div class="title">${film.title}${film.year ? " (" + film.year + ")" : ""}</div>
-              <div class="meta">${film.genres.join(", ") || "Unknown genre"}</div>
-              <div class="provider-list">
-                ${film.stream ? '<span class="pill stream">Stream</span>' : '<span class="pill">Rent only</span>'}
-                ${providers.map((p) => `<span class="pill">${p}</span>`).join(" ")}
+        if (providerSelect && genreSelect) {
+          addOption(providerSelect, "", "All providers");
+          data.providers.forEach((p) => addOption(providerSelect, p, p.replace(/_/g, " ")));
+          addOption(genreSelect, "", "All genres");
+          [...allGenres].sort().forEach((g) => addOption(genreSelect, g, g));
+        }
+
+        const render = () => {
+          const searchEl = document.getElementById("search");
+          const minYearEl = document.getElementById("minYear");
+          const streamEl = document.getElementById("streamOnly");
+          const search = searchEl ? searchEl.value.toLowerCase() : "";
+          const provider = providerSelect ? providerSelect.value : "";
+          const genre = genreSelect ? genreSelect.value : "";
+          const minYear = minYearEl ? parseInt(minYearEl.value, 10) : NaN;
+          const streamOnly = streamEl ? streamEl.checked : false;
+
+          const filtered = data.films.filter((film) => {
+            if (search && !film.title.toLowerCase().includes(search)) return false;
+            if (provider && !film.providers[provider]) return false;
+            if (genre && !(film.genres || []).includes(genre)) return false;
+            if (!isNaN(minYear) && film.year && film.year < minYear) return false;
+            if (streamOnly && !film.stream) return false;
+            return true;
+          });
+
+          if (!grid) {
+            return;
+          }
+          grid.innerHTML = "";
+          if (!filtered.length) {
+            grid.innerHTML = '<div class="meta">No films match the current filters.</div>';
+            return;
+          }
+          filtered.forEach((film, idx) => {
+            const card = document.createElement("div");
+            card.className = "card";
+            const providers = Object.entries(film.providers)
+              .filter(([_, v]) => v)
+              .map(([k]) => k.replace(/_/g, " "));
+
+            card.innerHTML = `
+              <div class="rank">${idx + 1}</div>
+              <div>
+                <div class="title">${film.title}${film.year ? " (" + film.year + ")" : ""}</div>
+                <div class="meta">${film.genres.join(", ") || "Unknown genre"}</div>
+                <div class="provider-list">
+                  ${film.stream ? '<span class="pill stream">Stream</span>' : '<span class="pill">Rent only</span>'}
+                  ${providers.map((p) => `<span class="pill">${p}</span>`).join(" ")}
+                </div>
               </div>
-            </div>
-            <div class="score">${film.score_scaled.toFixed(2)}</div>
-          `;
-          grid.appendChild(card);
+              <div class="score">${film.score_scaled.toFixed(2)}</div>
+            `;
+            grid.appendChild(card);
+          });
+        };
+
+        ["search", "provider", "genre", "minYear", "streamOnly"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener("input", render);
+          el.addEventListener("change", render);
         });
-      };
 
-      ["search", "provider", "genre", "minYear", "streamOnly"].forEach((id) => {
-        document.getElementById(id).addEventListener("input", render);
-        document.getElementById(id).addEventListener("change", render);
+        render();
       });
-
-      render();
     </script>
   </body>
 </html>
