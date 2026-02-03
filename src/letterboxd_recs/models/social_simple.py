@@ -799,6 +799,33 @@ def _compute_components(
     return jaccard, rating_shrunk
 
 
+def _compute_similarity(
+    overlap: int,
+    me_watched: int,
+    followee_watched: int,
+    rated_overlap: int,
+    avg_diff: float | None,
+    cfg: SocialSimilarityConfig,
+) -> float:
+    """
+    Backward-compatible scalar similarity helper used by tests.
+
+    The recommender uses min-max normalized components across users; this helper
+    computes a local multiplicative score without cross-user normalization.
+    """
+    jaccard, rating_shrunk = _compute_components(
+        overlap=overlap,
+        me_watched=me_watched,
+        followee_watched=followee_watched,
+        rated_overlap=rated_overlap,
+        avg_diff=avg_diff,
+        cfg=cfg,
+    )
+    base = max(0.0, jaccard * rating_shrunk)
+    power = cfg.stretch_power if cfg.stretch_power > 0 else 1.0
+    return base ** power
+
+
 def _minmax(values: list[float]) -> list[float]:
     if not values:
         return []

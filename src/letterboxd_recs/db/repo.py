@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from typing import Iterable
 
@@ -279,6 +280,13 @@ def select_all_usernames(conn: sqlite3.Connection) -> list[str]:
     return [row[0] for row in rows]
 
 
+def select_user_id(conn: sqlite3.Connection, username: str) -> int | None:
+    row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    if not row:
+        return None
+    return int(row[0])
+
+
 def select_user_rating_stats(
     conn: sqlite3.Connection, user_ids: list[int]
 ) -> dict[int, tuple[float, float] | None]:
@@ -419,3 +427,126 @@ def select_user_names(conn: sqlite3.Connection, user_ids: list[int]) -> dict[int
         user_ids,
     ).fetchall()
     return {int(row[0]): (row[1], row[2]) for row in rows}
+
+
+def select_film_slugs(conn: sqlite3.Connection, film_ids: list[int]) -> dict[int, str]:
+    if not film_ids:
+        return {}
+    placeholders = ",".join("?" for _ in film_ids)
+    rows = conn.execute(
+        f"""
+        SELECT id, letterboxd_id
+        FROM films
+        WHERE id IN ({placeholders})
+          AND letterboxd_id IS NOT NULL
+        """,
+        film_ids,
+    ).fetchall()
+    return {int(row[0]): str(row[1]) for row in rows}
+
+
+def upsert_film_availability_flags(
+    conn: sqlite3.Connection,
+    film_id: int,
+    region: str,
+    flags: dict[str, bool],
+    has_stream: bool = False,
+) -> None:
+    valid_columns = select_availability_columns(conn)
+    known_flags = {k: bool(v) for k, v in flags.items() if k in valid_columns}
+    conn.execute(
+        """
+        INSERT INTO film_availability_flags (film_id, region, stream, last_updated)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(film_id) DO UPDATE SET
+            region = excluded.region,
+            stream = excluded.stream,
+            last_updated = datetime('now')
+        """,
+        (film_id, region, int(has_stream)),
+    )
+
+    updates = ['region = ?', 'stream = ?', "last_updated = datetime('now')"]
+    params: list[object] = [region, int(has_stream)]
+    for col in sorted(known_flags.keys()):
+        _validate_availability_column(col)
+        updates.append(f'"{col}" = ?')
+        params.append(int(bool(known_flags[col])))
+    params.append(film_id)
+
+    conn.execute(
+        f"""
+        UPDATE film_availability_flags
+        SET {", ".join(updates)}
+        WHERE film_id = ?
+        """,
+        tuple(params),
+    )
+
+
+def select_available_film_ids(
+    conn: sqlite3.Connection,
+    film_ids: list[int],
+    provider_column: str,
+    region: str,
+) -> set[int]:
+    if provider_column not in select_availability_columns(conn):
+        raise ValueError(f"Unknown provider column: {provider_column}")
+    _validate_availability_column(provider_column)
+    if not film_ids:
+        return set()
+    placeholders = ",".join("?" for _ in film_ids)
+    rows = conn.execute(
+        f"""
+        SELECT film_id
+        FROM film_availability_flags
+        WHERE film_id IN ({placeholders})
+          AND region = ?
+          AND "{provider_column}" = 1
+        """,
+        (*film_ids, region),
+    ).fetchall()
+    return {int(row[0]) for row in rows}
+
+
+def select_availability_columns(conn: sqlite3.Connection) -> set[str]:
+    rows = conn.execute("PRAGMA table_info(film_availability_flags)").fetchall()
+    return {str(row[1]) for row in rows}
+
+
+def _validate_availability_column(name: str) -> None:
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+        raise ValueError(f"Invalid availability column name: {name}")
+
+
+def select_availability_map(
+    conn: sqlite3.Connection,
+    film_ids: list[int],
+    columns: list[str],
+) -> dict[int, dict[str, bool]]:
+    if not film_ids or not columns:
+        return {}
+    valid_columns = select_availability_columns(conn)
+    cols = [col for col in columns if col in valid_columns]
+    if not cols:
+        return {}
+    for col in cols:
+        _validate_availability_column(col)
+    placeholders = ",".join("?" for _ in film_ids)
+    col_expr = ", ".join(f'"{col}"' for col in cols)
+    rows = conn.execute(
+        f"""
+        SELECT film_id, {col_expr}
+        FROM film_availability_flags
+        WHERE film_id IN ({placeholders})
+        """,
+        film_ids,
+    ).fetchall()
+    results: dict[int, dict[str, bool]] = {}
+    for row in rows:
+        film_id = int(row[0])
+        values = {}
+        for idx, col in enumerate(cols, start=1):
+            values[col] = bool(row[idx])
+        results[film_id] = values
+    return results

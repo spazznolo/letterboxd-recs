@@ -1,5 +1,10 @@
 from pathlib import Path
 
+from letterboxd_recs.availability import (
+    extract_availability_csi_url,
+    parse_availability_sources,
+    parse_where_to_watch_flags,
+)
 from letterboxd_recs.ingest.letterboxd.parse import (
     is_challenge_page,
     parse_diary,
@@ -72,3 +77,45 @@ def test_genres_page_parsing() -> None:
     html = load("genres.html")
     genres = parse_genres_page(html)
     assert genres == ["Action", "War", "Drama", "History"]
+
+
+def test_where_to_watch_parsing() -> None:
+    html = load("where_to_watch.html")
+    source_flags, has_stream = parse_availability_sources(html)
+    providers = parse_where_to_watch_flags(html)
+    assert source_flags["netflix"] is True
+    assert source_flags["apple_itunes"] is True
+    assert source_flags["amazon"] is False
+    assert "physical_disc" not in source_flags
+    assert has_stream is True
+    assert "netflix" in providers
+    assert "apple_itunes" in providers
+    assert "amazon" not in providers
+
+
+def test_csi_availability_url_and_source_provider_mapping() -> None:
+    html = """
+    <div class="loading-csi"
+         data-src="/csi/film/the-batman/availability/?esiAllowUser=true&amp;esiAllowCountry=true">
+    </div>
+    """
+    csi_url = extract_availability_csi_url(html)
+    assert csi_url == (
+        "https://letterboxd.com/csi/film/the-batman/availability/"
+        "?esiAllowUser=true&esiAllowCountry=true"
+    )
+
+    csi_html = """
+    <section class="services">
+      <p id="source-netflix" class="service -netflix">
+        <span class="options"><a class="link -stream"><span class="extended">Stream</span></a></span>
+      </p>
+      <p id="source-amazonprimevideo" class="service -amazonprimevideo">
+        <span class="options"><a class="link -rent"><span class="extended">Rent</span></a></span>
+      </p>
+    </section>
+    """
+    flags, has_stream = parse_availability_sources(csi_html)
+    assert flags["netflix"] is True
+    assert flags["prime_video"] is True
+    assert has_stream is True

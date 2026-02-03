@@ -70,3 +70,30 @@ CREATE TABLE IF NOT EXISTS recommendations (
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (film_id) REFERENCES films(id)
 );
+
+CREATE TABLE IF NOT EXISTS film_availability_flags (
+    film_id INTEGER PRIMARY KEY,
+    region TEXT NOT NULL DEFAULT 'CA',
+    stream BOOLEAN NOT NULL DEFAULT 0,
+    netflix BOOLEAN NOT NULL DEFAULT 0,
+    disney_plus BOOLEAN NOT NULL DEFAULT 0,
+    prime_video BOOLEAN NOT NULL DEFAULT 0,
+    apple_tv_plus BOOLEAN NOT NULL DEFAULT 0,
+    crave BOOLEAN NOT NULL DEFAULT 0,
+    mubi BOOLEAN NOT NULL DEFAULT 0,
+    criterion_channel BOOLEAN NOT NULL DEFAULT 0,
+    max BOOLEAN NOT NULL DEFAULT 0,
+    hulu BOOLEAN NOT NULL DEFAULT 0,
+    paramount_plus BOOLEAN NOT NULL DEFAULT 0,
+    peacock BOOLEAN NOT NULL DEFAULT 0,
+    tubi BOOLEAN NOT NULL DEFAULT 0,
+    youtube BOOLEAN NOT NULL DEFAULT 0,
+    plex BOOLEAN NOT NULL DEFAULT 0,
+    amazon BOOLEAN NOT NULL DEFAULT 0,
+    apple_itunes BOOLEAN NOT NULL DEFAULT 0,
+    google_play_movies BOOLEAN NOT NULL DEFAULT 0,
+    cineplex BOOLEAN NOT NULL DEFAULT 0,
+    cosmogo BOOLEAN NOT NULL DEFAULT 0,
+    last_updated TEXT NOT NULL,
+    FOREIGN KEY (film_id) REFERENCES films(id)
+);

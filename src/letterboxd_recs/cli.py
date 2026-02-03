@@ -1,15 +1,121 @@
 import typer
 from rich.console import Console
 
+from letterboxd_recs.availability import (
+    CARED_PROVIDER_COLUMNS,
+    extract_availability_csi_url,
+    parse_availability_sources,
+    provider_column_from_arg,
+)
 from letterboxd_recs.config import load_config
 from letterboxd_recs.db import repo
 from letterboxd_recs.db.conn import ensure_db
+from letterboxd_recs.export.html import ExportFilm, render_recs_html
+from letterboxd_recs.ingest.letterboxd.browser import fetch_html as browser_fetch
 from letterboxd_recs.ingest.letterboxd.ingest import ingest_user
 from letterboxd_recs.graph.ingest import ingest_follow_graph
 from letterboxd_recs.models.social_simple import compute_social_scores, compute_similarity_scores
 
 app = typer.Typer(add_completion=False)
 console = Console()
+
+
+def _sort_results(results, sort: str):
+    sort_val = sort.lower()
+    if sort_val in ("asc", "ascending", "low", "bottom"):
+        return sorted(results, key=lambda item: item.score)
+    return sorted(results, key=lambda item: item.score, reverse=True)
+
+
+def _base_recommendations(cfg, username: str, sort: str):
+    results = compute_social_scores(
+        cfg.database_path,
+        username,
+        weights=cfg.social,
+        rating_weights=cfg.social_ratings,
+        similarity=cfg.social_similarity,
+        normalize=cfg.social_normalize,
+        limit=None,
+    )
+    return _sort_results(results, sort)
+
+
+def _refresh_all_users(cfg) -> tuple[int, int]:
+    with repo.connect(cfg.database_path) as conn:
+        usernames = repo.select_all_usernames(conn)
+    ok = 0
+    failed = 0
+    for username in usernames:
+        try:
+            ingest_user(
+                username,
+                cfg,
+                refresh=True,
+                include_diary=False,
+                include_films=True,
+                include_likes=False,
+                include_watchlist=True,
+            )
+            ok += 1
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            console.print(f"[red]Refresh failed for {username}: {exc}[/red]")
+    return ok, failed
+
+
+def _update_top_availability(cfg, username: str, top_n: int = 100) -> tuple[int, int]:
+    ranked = _base_recommendations(cfg, username, sort="desc")
+    top = ranked[:top_n]
+    if not top:
+        return 0, 0
+    with repo.connect(cfg.database_path) as conn:
+        slugs = repo.select_film_slugs(conn, [r.film_id for r in top])
+        updated = 0
+        skipped = 0
+        for item in top:
+            slug = slugs.get(item.film_id)
+            if not slug:
+                skipped += 1
+                continue
+            url = f"https://letterboxd.com/film/{slug}/"
+            html = browser_fetch(url, user_agent=cfg.app.user_agent).content
+            source_flags: dict[str, bool] = {}
+            base_flags, has_stream = parse_availability_sources(html)
+            source_flags.update(base_flags)
+            csi_url = extract_availability_csi_url(html)
+            if csi_url:
+                csi_html = browser_fetch(csi_url, user_agent=cfg.app.user_agent).content
+                csi_flags, csi_has_stream = parse_availability_sources(csi_html)
+                has_stream = has_stream or csi_has_stream
+                for key, val in csi_flags.items():
+                    source_flags[key] = source_flags.get(key, False) or val
+            repo.upsert_film_availability_flags(
+                conn,
+                item.film_id,
+                cfg.app.region,
+                source_flags,
+                has_stream=has_stream,
+            )
+            updated += 1
+        conn.commit()
+    return updated, skipped
+
+
+def _scaled_scores(results):
+    if not results:
+        return {}
+    scores = [item.score for item in results]
+    min_score = min(scores)
+    max_score = max(scores)
+    span = max_score - min_score
+    scaled = {}
+    for item in results:
+        if span > 0:
+            value = (item.score - min_score) / span
+        else:
+            value = 0.0
+        scaled[item.film_id] = value * 10.0
+    return scaled
 
 
 @app.command()
@@ -70,12 +176,107 @@ def ingest_user_only(
 
 
 @app.command()
-def refresh(username: str, availability: bool = False) -> None:
-    """Refresh selected data for a user."""
+def ingest_interactions(
+    username: str,
+    refresh: bool = False,
+    include_likes: bool = False,
+) -> None:
+    """Ingest a user's watched/watchlist interactions only (no graph)."""
     cfg = load_config()
     ensure_db(cfg.database_path)
-    console.print(f"Refreshing user: {username} (availability={availability})")
-    console.print("Refresh not implemented yet. This is a scaffold.")
+    console.print(f"Ingesting interactions for: {username} (refresh={refresh})")
+    result = ingest_user(
+        username,
+        cfg,
+        refresh=refresh,
+        include_diary=False,
+        include_films=True,
+        include_likes=include_likes,
+        include_watchlist=True,
+    )
+    console.print(
+        f"Ingested: watched={result.films_seen} liked={result.likes} watchlist={result.watchlist}"
+    )
+
+
+@app.command()
+def graph_ingest(
+    username: str,
+    max_depth: int = 1,
+    ingest_missing_interactions: bool = True,
+) -> None:
+    """Ingest follow graph and (optionally) scrape missing followee interactions."""
+    cfg = load_config()
+    ensure_db(cfg.database_path)
+    console.print(f"Ingesting follow graph for: {username} (max_depth={max_depth})")
+    graph_result = ingest_follow_graph(
+        username,
+        cfg,
+        refresh=False,
+        max_depth=max_depth,
+        ingest_interactions=False,
+    )
+    console.print(f"Graph: nodes={graph_result.nodes} edges={graph_result.edges}")
+    if not ingest_missing_interactions:
+        return
+    with repo.connect(cfg.database_path) as conn:
+        missing = repo.select_missing_followees(conn, username, 100, 100)
+    if not missing:
+        console.print("No missing followees to ingest.")
+        return
+    console.print(f"Ingesting interactions for {len(missing)} missing followees...")
+    ok = 0
+    failed = 0
+    for followee in missing:
+        try:
+            ingest_user(
+                followee,
+                cfg,
+                refresh=False,
+                include_diary=False,
+                include_films=True,
+                include_likes=False,
+                include_watchlist=True,
+            )
+            ok += 1
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            console.print(f"[red]Failed {followee}: {exc}[/red]")
+    console.print(f"Graph interaction ingest complete: ok={ok} failed={failed}")
+
+
+@app.command()
+def refresh() -> None:
+    """Refresh first page of watched/watchlist for every user in DB."""
+    cfg = load_config()
+    ensure_db(cfg.database_path)
+    ok, failed = _refresh_all_users(cfg)
+    console.print(f"Refresh complete: ok={ok} failed={failed}")
+
+
+@app.command()
+def update_availability(username: str = "spazznolo", top_n: int = 100) -> None:
+    """Scrape where-to-watch providers for the top-N recommended films."""
+    cfg = load_config()
+    ensure_db(cfg.database_path)
+    updated, skipped = _update_top_availability(cfg, username=username, top_n=top_n)
+    console.print(
+        f"Availability update complete: updated={updated} skipped_without_slug={skipped}"
+    )
+
+
+@app.command()
+def weekly(username: str = "spazznolo", top_n: int = 100) -> None:
+    """Weekly pipeline: refresh all users, then update top-N availability."""
+    cfg = load_config()
+    ensure_db(cfg.database_path)
+    ok, failed = _refresh_all_users(cfg)
+    console.print(f"Refresh complete: ok={ok} failed={failed}")
+    updated, skipped = _update_top_availability(cfg, username=username, top_n=top_n)
+    console.print(
+        f"Availability update complete: updated={updated} skipped_without_slug={skipped}"
+    )
+    _export_html(username=username, limit=500, out="docs/recs.html")
 
 
 @app.command()
@@ -83,6 +284,8 @@ def recommend(
     username: str,
     sort: str = "desc",
     genre: str | None = None,
+    provider: str | None = None,
+    stream: bool = False,
     min_year: int | None = None,
     recommend_ten: bool = False,
     social_only: bool = True,
@@ -95,22 +298,13 @@ def recommend(
     ensure_db(cfg.database_path)
     console.print(f"Recommending for: {username} (sort={sort})")
     if social_only:
-        results = compute_social_scores(
-            cfg.database_path,
-            username,
-            weights=cfg.social,
-            rating_weights=cfg.social_ratings,
-            similarity=cfg.social_similarity,
-            normalize=cfg.social_normalize,
-            limit=None,
-        )
-        sort_val = sort.lower()
-        if sort_val in ("asc", "ascending", "low", "bottom"):
-            results = sorted(results, key=lambda item: item.score)
-        else:
-            results = sorted(results, key=lambda item: item.score, reverse=True)
+        results = _base_recommendations(cfg, username, sort=sort)
         display_rank = 0
         genre_filter = genre.lower() if genre else None
+        provider_column = provider_column_from_arg(provider) if provider else None
+        if provider and provider_column is None:
+            console.print(f"[red]Unknown provider: {provider}[/red]")
+            raise typer.Exit(code=2)
         if results:
             all_scores = [item.score for item in results]
             min_score = min(all_scores)
@@ -128,6 +322,39 @@ def recommend(
                 if genre_filter not in genres_val:
                     continue
             filtered.append(item)
+        if provider_column or stream:
+            with repo.connect(cfg.database_path) as conn:
+                film_ids = [item.film_id for item in filtered]
+                available_sets: list[set[int]] = []
+                if provider_column:
+                    try:
+                        available_sets.append(
+                            repo.select_available_film_ids(
+                                conn,
+                                film_ids,
+                                provider_column=provider_column,
+                                region=cfg.app.region,
+                            )
+                        )
+                    except ValueError:
+                        console.print(
+                            f"[yellow]Provider column not found yet: {provider_column}[/yellow]"
+                        )
+                        available_sets.append(set())
+                if stream:
+                    available_sets.append(
+                        repo.select_available_film_ids(
+                            conn,
+                            film_ids,
+                            provider_column="stream",
+                            region=cfg.app.region,
+                        )
+                    )
+            if available_sets:
+                allowed = available_sets[0]
+                for subset in available_sets[1:]:
+                    allowed = allowed.intersection(subset)
+                filtered = [item for item in filtered if item.film_id in allowed]
         if recommend_ten:
             import random
 
@@ -209,6 +436,58 @@ def recommend(
                         )
         return
     console.print("Recommender not implemented yet beyond social_only.")
+
+
+@app.command()
+def export_html(
+    username: str,
+    limit: int = 500,
+    out: str = "docs/recs.html",
+) -> None:
+    """Export static HTML recommendations for GitHub Pages."""
+    _export_html(username=username, limit=limit, out=out)
+
+
+def _export_html(username: str, limit: int, out: str) -> None:
+    cfg = load_config()
+    ensure_db(cfg.database_path)
+    results = _base_recommendations(cfg, username, sort="desc")
+    if not results:
+        console.print("[yellow]No recommendations to export.[/yellow]")
+        return
+    results = results[:limit]
+    scaled_scores = _scaled_scores(results)
+    film_ids = [item.film_id for item in results]
+    provider_columns = list(CARED_PROVIDER_COLUMNS)
+    with repo.connect(cfg.database_path) as conn:
+        slug_map = repo.select_film_slugs(conn, film_ids)
+        availability = repo.select_availability_map(
+            conn,
+            film_ids,
+            ["stream"] + provider_columns,
+        )
+    films: list[ExportFilm] = []
+    for item in results:
+        slug = slug_map.get(item.film_id)
+        letterboxd_url = f"https://letterboxd.com/film/{slug}/" if slug else None
+        flags = availability.get(item.film_id, {})
+        stream_flag = bool(flags.get("stream", False))
+        provider_flags = {col: bool(flags.get(col, False)) for col in provider_columns}
+        genres = [g.strip() for g in (item.genres or "").split(",") if g.strip()]
+        films.append(
+            ExportFilm(
+                title=item.title,
+                year=item.year,
+                genres=genres,
+                score=item.score,
+                score_scaled=scaled_scores.get(item.film_id, 0.0),
+                letterboxd_url=letterboxd_url,
+                providers=provider_flags,
+                stream=stream_flag,
+            )
+        )
+    render_recs_html(username, films, provider_columns, Path(out))
+    console.print(f"Exported {len(films)} films to {out}")
 
 
 @app.command()

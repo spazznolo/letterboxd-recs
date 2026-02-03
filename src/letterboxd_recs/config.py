@@ -17,7 +17,7 @@ class ScrapeConfig:
     max_retries: int
     cache_ttl_days: int
     use_browser: bool
-    max_pages: int
+    max_pages: int = 100
 
 
 @dataclass(frozen=True)

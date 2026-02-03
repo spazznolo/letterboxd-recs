@@ -24,14 +24,24 @@ All commands read `config.toml` in the repo root.
 
 - `letterboxd-recs ingest USERNAME [--refresh] [--max-depth N] [--graph/--no-graph] [--graph-interactions/--no-graph-interactions] [--graph-only]`  
   Ingests the target user (profile, diary, films, likes, watchlist). If `--graph` is enabled, it also ingests the follow graph up to `max_depth`. Use `--graph-interactions` to ingest followees’ watched/liked/watchlist data (heavy). Default is **off**. Use `--graph-only` to skip scraping the user’s own diary/films and only fetch followees + graph edges.
-- `letterboxd-recs recommend USERNAME [--limit N] [--min-score X]`  
-  Prints social-only recommendations (followee-based) using current weights in `config.toml`.
+- `letterboxd-recs ingest-user-only USERNAME [--refresh]`  
+  Ingests one user only (no graph edges). Good for targeted refreshes.
+- `letterboxd-recs ingest-interactions USERNAME [--refresh]`  
+  Ingests watched/watchlist (and optional likes) only for one user. Full pagination by default; `--refresh` limits to first page.
+- `letterboxd-recs graph-ingest USERNAME [--max-depth N] [--ingest-missing-interactions/--no-ingest-missing-interactions]`  
+  Scrapes follow graph and ingests missing followees (default depth 1).
+- `letterboxd-recs refresh`  
+  Refreshes first page of watched/watchlist for every user in the DB.
+- `letterboxd-recs recommend USERNAME [--limit N] [--sort desc|asc] [--genre GENRE] [--provider PROVIDER] [--min-year YYYY] [--recommend-ten]`  
+  Prints recommendations with optional filters (provider filter uses scraped availability flags).
+- `letterboxd-recs update-availability [--username USERNAME] [--top-n 100]`  
+  Recomputes top recommendations and scrapes "Where to watch" for those films into `film_availability_flags`.
+- `letterboxd-recs export-html USERNAME [--limit 500] [--out docs/recs.html]`  
+  Builds a static HTML page for GitHub Pages with filters (provider, genre, stream, min year).
+- `letterboxd-recs weekly [--username USERNAME] [--top-n 100]`  
+  Runs weekly pipeline: refresh all users, update top-N availability, and export `docs/recs.html`.
 - `letterboxd-recs similarities USERNAME [--limit N]`  
   Prints followee similarity scores with Jaccard + rating alignment components.
-- `letterboxd-recs refresh USERNAME --availability`  
-  Placeholder for availability refresh (not implemented yet).
-- `letterboxd-recs recommend USERNAME --sort score|provider --min-score X`  
-  Placeholder for recommendation output (not implemented yet).
 - `letterboxd-recs status USERNAME`  
   Placeholder for status summary (not implemented yet).
 
@@ -124,6 +134,48 @@ Notes:
 ## Notes
 - Scraping can violate site ToS. Use responsibly and keep rate limits conservative.
 - Availability is sourced from Letterboxd availability pages (region configurable; default CA).
+
+## Weekly automation (macOS launchd)
+Create `~/Library/LaunchAgents/com.letterboxd.recs.weekly.plist`:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key><string>com.letterboxd.recs.weekly</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/jspagnolo/Documents/GitHub/letterboxd-recs/.venv/bin/letterboxd-recs</string>
+      <string>weekly</string>
+      <string>--username</string><string>spazznolo</string>
+      <string>--top-n</string><string>100</string>
+    </array>
+    <key>WorkingDirectory</key><string>/Users/jspagnolo/Documents/GitHub/letterboxd-recs</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Weekday</key><integer>1</integer>
+      <key>Hour</key><integer>6</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key><string>/tmp/letterboxd-recs-weekly.out</string>
+    <key>StandardErrorPath</key><string>/tmp/letterboxd-recs-weekly.err</string>
+  </dict>
+</plist>
+```
+
+## GitHub Pages
+1. Ensure `docs/recs.html` exists (run `letterboxd-recs export-html spazznolo`).
+2. In GitHub repo settings → Pages:
+   - Source: `main` branch
+   - Folder: `/docs`
+3. Your page will be served at the URL GitHub provides.
+
+Load it:
+```bash
+launchctl unload ~/Library/LaunchAgents/com.letterboxd.recs.weekly.plist 2>/dev/null
+launchctl load ~/Library/LaunchAgents/com.letterboxd.recs.weekly.plist
+launchctl list | rg letterboxd.recs.weekly
+```
 
 ## Docs
 - `docs/architecture.md`

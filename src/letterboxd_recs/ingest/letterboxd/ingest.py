@@ -141,7 +141,6 @@ def _collect_paginated(
             page_url,
             cache_key=cache_key,
             refresh=refresh,
-            browser_first=browser_first,
         )
         if is_challenge_page(html):
             raise RuntimeError("Blocked by Cloudflare challenge while scraping.")
