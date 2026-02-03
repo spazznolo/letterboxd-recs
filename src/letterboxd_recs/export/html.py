@@ -38,206 +38,168 @@ def render_recs_html(
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang=\"en\">
+<html lang="en">
   <head>
-    <meta charset=\"UTF-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Letterboxd Recs</title>
-    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />
-    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href=\"https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap\"
-      rel=\"stylesheet\"
+      href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
     />
     <style>
       :root {
-        --bg: #0f141a;
-        --panel: #151e26;
-        --panel-2: #1b2633;
-        --text: #e8eef5;
-        --muted: #9fb0c3;
-        --accent: #7cf6c6;
-        --accent-2: #59b7ff;
-        --warn: #f9c784;
-        --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+        --bg: #0d0f11;
+        --panel: #14181c;
+        --text: #f3f3f3;
+        --muted: #9aa3ad;
+        --rule: #252a30;
+        --accent: #f3f3f3;
+        --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       * { box-sizing: border-box; }
 
       body {
         margin: 0;
-        font-family: \"Space Grotesk\", system-ui, sans-serif;
-        background: radial-gradient(circle at top left, #1a2531 0%, #0f141a 45%, #0b0f14 100%);
+        font-family: "EB Garamond", serif;
+        background: var(--bg);
         color: var(--text);
         min-height: 100vh;
       }
 
-      header {
-        padding: 36px clamp(20px, 4vw, 64px) 24px;
-      }
-
-      h1 {
-        font-family: \"Fraunces\", serif;
-        font-weight: 700;
-        font-size: clamp(28px, 5vw, 52px);
-        margin: 0 0 8px;
-        letter-spacing: 0.5px;
+      .toolbar {
+        padding: 28px clamp(20px, 6vw, 96px) 14px;
       }
 
       .subtitle {
         color: var(--muted);
-        font-size: 15px;
-      }
-
-      .filters {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-        padding: 0 clamp(20px, 4vw, 64px) 24px;
-      }
-
-      .filter-card {
-        background: var(--panel);
-        padding: 12px 14px;
-        border-radius: 14px;
-        box-shadow: var(--shadow);
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      label {
         font-size: 12px;
+        font-family: var(--mono);
+        letter-spacing: 0.06em;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--muted);
-      }
-
-      select, input {
-        background: var(--panel-2);
-        border: 1px solid #223242;
-        border-radius: 10px;
-        padding: 8px 10px;
-        color: var(--text);
-        font-size: 14px;
-      }
-
-      .toggle {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 14px;
       }
 
       .content {
-        padding: 0 clamp(20px, 4vw, 64px) 60px;
+        padding: 0 clamp(20px, 6vw, 96px) 60px;
       }
 
       .grid {
         display: grid;
-        gap: 16px;
+        gap: 0;
+        border-top: 1px solid var(--rule);
       }
 
-      .card {
-        background: linear-gradient(135deg, rgba(34,46,61,0.9), rgba(17,25,35,0.9));
-        border: 1px solid #27384a;
-        border-radius: 18px;
-        padding: 16px 18px;
-        box-shadow: var(--shadow);
+      .row,
+      .controls-row {
         display: grid;
-        grid-template-columns: 80px 1fr auto;
-        gap: 14px;
+        grid-template-columns: 62px 70px 1.6fr 86px 1.6fr 130px;
+        gap: 12px;
         align-items: center;
+        padding: 10px 4px;
+        border-bottom: 1px solid var(--rule);
+        font-size: 14px;
       }
 
-      .rank {
-        font-family: \"Fraunces\", serif;
-        font-size: 26px;
-        color: var(--accent);
+      .controls-row {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
       }
 
-      .title {
-        font-size: 18px;
-        margin: 0 0 6px;
+      .controls-row select,
+      .controls-row input {
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        padding: 6px 8px;
+        color: var(--text);
+        font-size: 12px;
+        font-family: var(--mono);
       }
 
-      .meta {
+      .controls-row input[type="number"] {
+        max-width: 72px;
+      }
+
+      .controls-row .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        text-transform: none;
+        letter-spacing: 0.02em;
+      }
+
+      .row span {
+        font-family: var(--mono);
+      }
+
+      .row .title {
+        font-family: "EB Garamond", serif;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .row .genres {
         color: var(--muted);
         font-size: 13px;
       }
 
-      .score {
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--accent-2);
-      }
-
-      .pill {
-        display: inline-flex;
-        padding: 4px 8px;
-        border-radius: 999px;
-        font-size: 12px;
-        background: rgba(124, 246, 198, 0.15);
-        color: var(--accent);
-        margin-right: 6px;
-      }
-
-      .pill.stream {
-        background: rgba(89, 183, 255, 0.2);
-        color: var(--accent-2);
-      }
-
-      .provider-list {
-        margin-top: 8px;
+      .row .availability {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 11px;
         color: var(--muted);
-        font-size: 12px;
       }
 
-      @media (max-width: 720px) {
-        .card {
-          grid-template-columns: 1fr;
-          text-align: left;
+      .row .availability strong {
+        color: var(--accent);
+      }
+
+      @media (max-width: 900px) {
+        .row,
+        .controls-row {
+          grid-template-columns: 52px 64px 1.4fr 76px 1.2fr 90px;
+          font-size: 13px;
         }
-        .score {
-          justify-self: start;
+        .controls-row input[type="number"] {
+          max-width: 64px;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .row,
+        .controls-row {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+        .row span {
+          font-family: "EB Garamond", serif;
         }
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Letterboxd Recs</h1>
-      <div class=\"subtitle\" id=\"subtitle\"></div>
-    </header>
-
-    <section class=\"filters\">
-      <div class=\"filter-card\">
-        <label for=\"search\">Search</label>
-        <input id=\"search\" placeholder=\"Title contains...\" />
-      </div>
-      <div class=\"filter-card\">
-        <label for=\"provider\">Provider</label>
-        <select id=\"provider\"></select>
-      </div>
-      <div class=\"filter-card\">
-        <label for=\"genre\">Genre</label>
-        <select id=\"genre\"></select>
-      </div>
-      <div class=\"filter-card\">
-        <label for=\"minYear\">Min Year</label>
-        <input id=\"minYear\" type=\"number\" placeholder=\"e.g. 2010\" />
-      </div>
-      <div class=\"filter-card\">
-        <label>Stream Only</label>
-        <div class=\"toggle\">
-          <input id=\"streamOnly\" type=\"checkbox\" />
-          <span>Require free stream/play</span>
-        </div>
-      </div>
+    <section class="toolbar">
+      <div class="subtitle" id="subtitle"></div>
     </section>
 
-    <section class=\"content\">
-      <div class=\"grid\" id=\"grid\"></div>
+    <section class="content">
+      <div class="grid" id="grid">
+        <div class="controls-row">
+          <span>Rank</span>
+          <span>Score</span>
+          <span>Provider <select id="provider"></select></span>
+          <span>Min Year <input id="minYear" type="number" placeholder="min" /></span>
+          <span>Genre <select id="genre"></select></span>
+          <span>Stream <label class="toggle"><input id="streamOnly" type="checkbox" /> Only</label></span>
+        </div>
+        <div id="rows"></div>
+      </div>
     </section>
 
     <script id="recs-data" type="application/json">/*__DATA__*/</script>
@@ -253,15 +215,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         }
         const subtitle = document.getElementById("subtitle");
         if (subtitle) {
-          subtitle.textContent = `Generated for ${data.username} on ${data.generated_at}`;
+          subtitle.textContent = `Last Updated: ${data.generated_at}`;
         }
 
         const providerSelect = document.getElementById("provider");
         const genreSelect = document.getElementById("genre");
-        const grid = document.getElementById("grid");
-        if (!providerSelect || !genreSelect || !grid) {
-          console.error("Missing expected DOM elements for filters.");
-        }
+        const minYearInput = document.getElementById("minYear");
+        const streamOnlyInput = document.getElementById("streamOnly");
+        const rows = document.getElementById("rows");
+
+        if (!providerSelect || !genreSelect || !minYearInput || !streamOnlyInput || !rows) return;
 
         const allGenres = new Set();
         data.films.forEach((film) => {
@@ -275,25 +238,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           select.appendChild(option);
         };
 
-        if (providerSelect && genreSelect) {
-          addOption(providerSelect, "", "All providers");
-          data.providers.forEach((p) => addOption(providerSelect, p, p.replace(/_/g, " ")));
-          addOption(genreSelect, "", "All genres");
-          [...allGenres].sort().forEach((g) => addOption(genreSelect, g, g));
-        }
+        addOption(providerSelect, "", "All");
+        data.providers.forEach((p) => addOption(providerSelect, p, p.replace(/_/g, " ")));
+        addOption(genreSelect, "", "All");
+        [...allGenres].sort().forEach((g) => addOption(genreSelect, g, g));
 
         const render = () => {
-          const searchEl = document.getElementById("search");
-          const minYearEl = document.getElementById("minYear");
-          const streamEl = document.getElementById("streamOnly");
-          const search = searchEl ? searchEl.value.toLowerCase() : "";
-          const provider = providerSelect ? providerSelect.value : "";
-          const genre = genreSelect ? genreSelect.value : "";
-          const minYear = minYearEl ? parseInt(minYearEl.value, 10) : NaN;
-          const streamOnly = streamEl ? streamEl.checked : false;
+          const provider = providerSelect.value;
+          const genre = genreSelect.value;
+          const minYear = parseInt(minYearInput.value, 10);
+          const streamOnly = streamOnlyInput.checked;
 
           const filtered = data.films.filter((film) => {
-            if (search && !film.title.toLowerCase().includes(search)) return false;
             if (provider && !film.providers[provider]) return false;
             if (genre && !(film.genres || []).includes(genre)) return false;
             if (!isNaN(minYear) && film.year && film.year < minYear) return false;
@@ -301,43 +257,37 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             return true;
           });
 
-          if (!grid) {
-            return;
-          }
-          grid.innerHTML = "";
-          if (!filtered.length) {
-            grid.innerHTML = '<div class="meta">No films match the current filters.</div>';
-            return;
-          }
-          filtered.forEach((film, idx) => {
-            const card = document.createElement("div");
-            card.className = "card";
-            const providers = Object.entries(film.providers)
-              .filter(([_, v]) => v)
-              .map(([k]) => k.replace(/_/g, " "));
+          rows.innerHTML = "";
 
-            card.innerHTML = `
-              <div class="rank">${idx + 1}</div>
-              <div>
-                <div class="title">${film.title}${film.year ? " (" + film.year + ")" : ""}</div>
-                <div class="meta">${film.genres.join(", ") || "Unknown genre"}</div>
-                <div class="provider-list">
-                  ${film.stream ? '<span class="pill stream">Stream</span>' : '<span class="pill">Rent only</span>'}
-                  ${providers.map((p) => `<span class="pill">${p}</span>`).join(" ")}
-                </div>
-              </div>
-              <div class="score">${film.score_scaled.toFixed(2)}</div>
+          if (!filtered.length) {
+            const empty = document.createElement("div");
+            empty.className = "row";
+            empty.innerHTML = '<span class="genres">No films match the current filters.</span>';
+            rows.appendChild(empty);
+            return;
+          }
+
+          filtered.forEach((film, idx) => {
+            const row = document.createElement("div");
+            row.className = "row";
+            const genres = (film.genres || []).join(", ") || "Unknown";
+            const availability = film.stream ? "stream" : "rent";
+            row.innerHTML = `
+              <span>${idx + 1}</span>
+              <span>${film.score.toFixed(2)}</span>
+              <span class="title">${film.title}</span>
+              <span>${film.year || "-"}</span>
+              <span class="genres">${genres}</span>
+              <span class="availability"><strong>${availability}</strong></span>
             `;
-            grid.appendChild(card);
+            rows.appendChild(row);
           });
         };
 
-        ["search", "provider", "genre", "minYear", "streamOnly"].forEach((id) => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.addEventListener("input", render);
-          el.addEventListener("change", render);
-        });
+        providerSelect.addEventListener("change", render);
+        genreSelect.addEventListener("change", render);
+        minYearInput.addEventListener("input", render);
+        streamOnlyInput.addEventListener("change", render);
 
         render();
       });
