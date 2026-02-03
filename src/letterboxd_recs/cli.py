@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import typer
 from rich.console import Console
 
@@ -276,7 +278,7 @@ def weekly(username: str = "spazznolo", top_n: int = 100) -> None:
     console.print(
         f"Availability update complete: updated={updated} skipped_without_slug={skipped}"
     )
-    _export_html(username=username, limit=500, out="docs/recs.html")
+    _export_html(username=username, limit=500, out="docs/index.html")
 
 
 @app.command()
@@ -442,7 +444,7 @@ def recommend(
 def export_html(
     username: str,
     limit: int = 500,
-    out: str = "docs/recs.html",
+    out: str = "docs/index.html",
 ) -> None:
     """Export static HTML recommendations for GitHub Pages."""
     _export_html(username=username, limit=limit, out=out)
