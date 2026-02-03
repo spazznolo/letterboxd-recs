@@ -43,12 +43,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Letterboxd Recs</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <style>
       :root {
         --bg: #0d0f11;
@@ -57,14 +51,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         --muted: #9aa3ad;
         --rule: #252a30;
         --accent: #f3f3f3;
-        --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        --mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       * { box-sizing: border-box; }
 
       body {
         margin: 0;
-        font-family: "EB Garamond", serif;
+        font-family: "Graphik", "Helvetica Neue", Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
         min-height: 100vh;
@@ -139,9 +133,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       }
 
       .row .title {
-        font-family: "EB Garamond", serif;
+        font-family: "Tiempos Headline", "Times New Roman", serif;
         font-size: 16px;
         font-weight: 600;
+      }
+
+      .row .title-link {
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .row .title-link:hover {
+        text-decoration: underline;
       }
 
       .row .genres {
@@ -178,7 +181,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           gap: 6px;
         }
         .row span {
-          font-family: "EB Garamond", serif;
+          font-family: "Tiempos Headline", "Times New Roman", serif;
         }
       }
     </style>
@@ -272,10 +275,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             row.className = "row";
             const genres = (film.genres || []).join(", ") || "Unknown";
             const availability = film.stream ? "stream" : "rent";
+            const titleHtml = film.letterboxd_url
+              ? `<a class="title title-link" href="${film.letterboxd_url}" target="_blank" rel="noopener noreferrer">${film.title}</a>`
+              : `<span class="title">${film.title}</span>`;
             row.innerHTML = `
               <span>${idx + 1}</span>
               <span>${film.score.toFixed(2)}</span>
-              <span class="title">${film.title}</span>
+              ${titleHtml}
               <span>${film.year || "-"}</span>
               <span class="genres">${genres}</span>
               <span class="availability"><strong>${availability}</strong></span>
