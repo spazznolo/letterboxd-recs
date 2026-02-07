@@ -39,7 +39,7 @@ All commands read `config.toml` in the repo root.
 - `letterboxd-recs export-html USERNAME [--limit 500] [--out docs/index.html]`  
   Builds a static HTML page for GitHub Pages with filters (provider, genre, stream, min year).
 - `letterboxd-recs weekly [--username USERNAME] [--top-n 100]`  
-  Runs weekly pipeline: refresh all users, update top-N availability, and export `docs/index.html`.
+  Runs weekly pipeline: refresh all users, sample 10 new users from followee lists, update top-N availability, and export `docs/index.html`.
 - `letterboxd-recs similarities USERNAME [--limit N]`  
   Prints followee similarity scores with Jaccard + rating alignment components.
 - `letterboxd-recs status USERNAME`  

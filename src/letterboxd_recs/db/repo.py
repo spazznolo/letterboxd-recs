@@ -429,6 +429,37 @@ def select_user_names(conn: sqlite3.Connection, user_ids: list[int]) -> dict[int
     return {int(row[0]): (row[1], row[2]) for row in rows}
 
 
+def select_following_count(conn: sqlite3.Connection, username: str) -> int:
+    row = conn.execute(
+        "SELECT following_count FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    if not row or row[0] is None:
+        return 0
+    return int(row[0])
+
+
+def delete_user_data(conn: sqlite3.Connection, user_id: int) -> None:
+    conn.execute("DELETE FROM interactions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM recommendations WHERE user_id = ?", (user_id,))
+    conn.execute(
+        "DELETE FROM graph_edges WHERE src_user_id = ? OR dst_user_id = ?",
+        (user_id, user_id),
+    )
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+def delete_user_by_username(conn: sqlite3.Connection, username: str) -> bool:
+    row = conn.execute(
+        "SELECT id FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    if not row:
+        return False
+    delete_user_data(conn, int(row[0]))
+    return True
+
+
 def select_film_slugs(conn: sqlite3.Connection, film_ids: list[int]) -> dict[int, str]:
     if not film_ids:
         return {}

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import math
+import random
 import typer
 from rich.console import Console
 
@@ -15,8 +17,10 @@ from letterboxd_recs.db.conn import ensure_db
 from letterboxd_recs.export.html import ExportFilm, render_recs_html
 from letterboxd_recs.ingest.letterboxd.browser import fetch_html as browser_fetch
 from letterboxd_recs.ingest.letterboxd.ingest import ingest_user
+from letterboxd_recs.ingest.letterboxd.social import parse_following_entries
 from letterboxd_recs.graph.ingest import ingest_follow_graph
 from letterboxd_recs.models.social_simple import compute_social_scores, compute_similarity_scores
+from letterboxd_recs.util.retry import retry
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -274,6 +278,11 @@ def weekly(username: str = "spazznolo", top_n: int = 100) -> None:
     ensure_db(cfg.database_path)
     ok, failed = _refresh_all_users(cfg)
     console.print(f"Refresh complete: ok={ok} failed={failed}")
+    added_users = _refresh_similarity_pool(cfg, username, sample_count=10)
+    if added_users:
+        console.print(f"Similarity pool: added={len(added_users)} -> {', '.join(added_users)}")
+    else:
+        console.print("Similarity pool: added=0")
     updated, skipped = _update_top_availability(cfg, username=username, top_n=top_n)
     console.print(
         f"Availability update complete: updated={updated} skipped_without_slug={skipped}"
@@ -490,6 +499,92 @@ def _export_html(username: str, limit: int, out: str) -> None:
         )
     render_recs_html(username, films, provider_columns, Path(out))
     console.print(f"Exported {len(films)} films to {out}")
+
+
+def _refresh_similarity_pool(
+    cfg,
+    username: str,
+    sample_count: int = 10,
+) -> list[str]:
+    scores = compute_similarity_scores(
+        cfg.database_path,
+        username,
+        similarity=cfg.social_similarity,
+        normalize_top=False,
+    )
+    if not scores:
+        return []
+
+    remaining = list(scores)
+    if not remaining:
+        return []
+
+    weights = [max(0.0, s.similarity) for s in remaining]
+    if all(w == 0 for w in weights):
+        weights = [1.0 for _ in remaining]
+
+    added = 0
+    added_usernames: list[str] = []
+    attempts = 0
+    max_attempts = sample_count * 6
+    while added < sample_count and attempts < max_attempts:
+        attempts += 1
+        base = random.choices(remaining, weights=weights, k=1)[0]
+        followee = _random_followee(base.username, cfg)
+        if not followee:
+            continue
+        with repo.connect(cfg.database_path) as conn:
+            if repo.select_user_id(conn, followee.username):
+                continue
+            src_id = repo.ensure_user(conn, base.username)
+            dst_id = repo.upsert_user_stats(
+                conn,
+                followee.username,
+                followee.display_name,
+                followee.followers,
+                followee.following,
+                followee.watched,
+            )
+            repo.upsert_graph_edge(conn, src_id, dst_id, 1)
+            conn.commit()
+        try:
+            ingest_user(
+                followee.username,
+                cfg,
+                refresh=False,
+                include_diary=False,
+                include_films=True,
+                include_likes=False,
+                include_watchlist=True,
+            )
+            added += 1
+            added_usernames.append(followee.username)
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[yellow]Failed ingest for {followee.username}: {exc}[/yellow]")
+
+    return added_usernames
+
+
+def _random_followee(username: str, cfg):
+    with repo.connect(cfg.database_path) as conn:
+        following_count = repo.select_following_count(conn, username)
+    pages = max(1, math.ceil(following_count / 10)) if following_count > 0 else 1
+    page = random.randint(1, pages)
+    if page == 1:
+        url = f"https://letterboxd.com/{username}/following/"
+    else:
+        url = f"https://letterboxd.com/{username}/following/page/{page}/"
+    def fetch_entries():
+        html = browser_fetch(url, user_agent=cfg.app.user_agent).content
+        return parse_following_entries(html)
+
+    def on_error(exc: Exception, attempt: int) -> None:
+        console.print(f"[yellow]Retry {attempt} for followees of {username}: {exc}[/yellow]")
+
+    entries = retry(fetch_entries, attempts=3, delay_seconds=2.0, on_error=on_error)
+    if not entries:
+        return None
+    return random.choice(entries)
 
 
 @app.command()
