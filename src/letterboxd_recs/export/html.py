@@ -275,12 +275,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             row.className = "row";
             const genres = (film.genres || []).join(", ") || "Unknown";
             const availability = film.stream ? "stream" : "rent";
+            const normalizedScore = Number.isFinite(Number(film.score_scaled))
+              ? Number(film.score_scaled)
+              : Number(film.score);
+            const displayScore = Math.max(0, Math.min(10, Number.isFinite(normalizedScore) ? normalizedScore : 0));
             const titleHtml = film.letterboxd_url
               ? `<a class="title title-link" href="${film.letterboxd_url}" target="_blank" rel="noopener noreferrer">${film.title}</a>`
               : `<span class="title">${film.title}</span>`;
             row.innerHTML = `
               <span>${idx + 1}</span>
-              <span>${film.score.toFixed(2)}</span>
+              <span>${displayScore.toFixed(2)}</span>
               ${titleHtml}
               <span>${film.year || "-"}</span>
               <span class="genres">${genres}</span>
