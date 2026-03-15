@@ -145,16 +145,17 @@ Create `~/Library/LaunchAgents/com.letterboxd.recs.weekly.plist`:
     <key>Label</key><string>com.letterboxd.recs.weekly</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/jspagnolo/Documents/GitHub/letterboxd-recs/.venv/bin/letterboxd-recs</string>
-      <string>weekly</string>
-      <string>--username</string><string>spazznolo</string>
-      <string>--top-n</string><string>100</string>
+      <string>/bin/bash</string>
+      <string>/Users/jspagnolo/Documents/GitHub/letterboxd-recs/tools/weekly_publish.sh</string>
+      <string>spazznolo</string>
+      <string>100</string>
+      <string>main</string>
     </array>
     <key>WorkingDirectory</key><string>/Users/jspagnolo/Documents/GitHub/letterboxd-recs</string>
     <key>StartCalendarInterval</key>
     <dict>
-      <key>Weekday</key><integer>1</integer>
-      <key>Hour</key><integer>6</integer>
+      <key>Weekday</key><integer>0</integer>
+      <key>Hour</key><integer>5</integer>
       <key>Minute</key><integer>0</integer>
     </dict>
     <key>StandardOutPath</key><string>/tmp/letterboxd-recs-weekly.out</string>
