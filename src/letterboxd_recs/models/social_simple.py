@@ -51,6 +51,7 @@ def compute_social_scores(
     similarity: SocialSimilarityConfig | None = None,
     normalize: SocialNormalizeConfig | None = None,
     limit: int | None = 200,
+    similar_user_limit: int | None = None,
 ) -> list[SocialScore]:
     if weights is None:
         weights = SocialWeights()
@@ -83,10 +84,8 @@ def compute_social_scores(
         )
 
     with repo.connect(db_path) as conn:
-        rows = repo.select_social_rows(conn, username)
         sim_rows = repo.select_similarity_rows(conn, username)
         me_watched = repo.select_watched_count(conn, username)
-        watchlist_rows = repo.select_user_watchlist(conn, username)
         root_id = conn.execute(
             "SELECT id FROM users WHERE username = ?",
             (username,),
@@ -121,6 +120,27 @@ def compute_social_scores(
         top = max(sim_map.values())
         if top > 0:
             sim_map = {k: v / top for k, v in sim_map.items()}
+
+    allowed_followee_ids = None
+    if similar_user_limit is not None:
+        ranked_followees = sorted(
+            sim_map.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        allowed_followee_ids = [
+            followee_id for followee_id, _ in ranked_followees[:similar_user_limit]
+        ]
+        allowed_followee_set = set(allowed_followee_ids)
+        sim_map = {
+            followee_id: weight
+            for followee_id, weight in sim_map.items()
+            if followee_id in allowed_followee_set
+        }
+
+    with repo.connect(db_path) as conn:
+        rows = repo.select_social_rows(conn, username, allowed_followee_ids)
+        watchlist_rows = repo.select_user_watchlist(conn, username)
 
     if normalize.enabled and (rows or watchlist_rows):
         component_rows: list[dict[str, float]] = []

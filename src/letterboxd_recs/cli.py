@@ -33,7 +33,12 @@ def _sort_results(results, sort: str):
     return sorted(results, key=lambda item: item.score, reverse=True)
 
 
-def _base_recommendations(cfg, username: str, sort: str):
+def _base_recommendations(
+    cfg,
+    username: str,
+    sort: str,
+    similar_user_limit: int | None = None,
+):
     results = compute_social_scores(
         cfg.database_path,
         username,
@@ -42,13 +47,12 @@ def _base_recommendations(cfg, username: str, sort: str):
         similarity=cfg.social_similarity,
         normalize=cfg.social_normalize,
         limit=None,
+        similar_user_limit=similar_user_limit,
     )
     return _sort_results(results, sort)
 
 
-def _refresh_all_users(cfg) -> tuple[int, int]:
-    with repo.connect(cfg.database_path) as conn:
-        usernames = repo.select_all_usernames(conn)
+def _refresh_usernames(cfg, usernames: list[str]) -> tuple[int, int]:
     ok = 0
     failed = 0
     for username in usernames:
@@ -69,8 +73,39 @@ def _refresh_all_users(cfg) -> tuple[int, int]:
     return ok, failed
 
 
-def _update_top_availability(cfg, username: str, top_n: int = 100) -> tuple[int, int]:
-    ranked = _base_recommendations(cfg, username, sort="desc")
+def _refresh_all_users(cfg) -> tuple[int, int]:
+    with repo.connect(cfg.database_path) as conn:
+        usernames = repo.select_all_usernames(conn)
+    return _refresh_usernames(cfg, usernames)
+
+
+def _refresh_similar_users(
+    cfg,
+    username: str,
+    similar_user_limit: int,
+) -> tuple[int, int]:
+    scores = compute_similarity_scores(
+        cfg.database_path,
+        username,
+        similarity=cfg.social_similarity,
+        normalize_top=False,
+    )
+    usernames = [username] + [entry.username for entry in scores[:similar_user_limit]]
+    return _refresh_usernames(cfg, usernames)
+
+
+def _update_top_availability(
+    cfg,
+    username: str,
+    top_n: int = 100,
+    similar_user_limit: int | None = 100,
+) -> tuple[int, int]:
+    ranked = _base_recommendations(
+        cfg,
+        username,
+        sort="desc",
+        similar_user_limit=similar_user_limit,
+    )
     top = ranked[:top_n]
     if not top:
         return 0, 0
@@ -261,33 +296,65 @@ def refresh() -> None:
 
 
 @app.command()
-def update_availability(username: str = "spazznolo", top_n: int = 100) -> None:
+def update_availability(
+    username: str = "spazznolo",
+    top_n: int = 100,
+    similar_users: int | None = 100,
+) -> None:
     """Scrape where-to-watch providers for the top-N recommended films."""
     cfg = load_config()
     ensure_db(cfg.database_path)
-    updated, skipped = _update_top_availability(cfg, username=username, top_n=top_n)
+    updated, skipped = _update_top_availability(
+        cfg,
+        username=username,
+        top_n=top_n,
+        similar_user_limit=similar_users,
+    )
     console.print(
         f"Availability update complete: updated={updated} skipped_without_slug={skipped}"
     )
 
 
 @app.command()
-def weekly(username: str = "spazznolo", top_n: int = 100) -> None:
-    """Weekly pipeline: refresh all users, then update top-N availability."""
+def weekly(
+    username: str = "spazznolo",
+    top_n: int = 100,
+    new_users: int = 20,
+    similar_users: int = 100,
+) -> None:
+    """Weekly pipeline: refresh similar users, discover users, update availability."""
     cfg = load_config()
     ensure_db(cfg.database_path)
-    ok, failed = _refresh_all_users(cfg)
-    console.print(f"Refresh complete: ok={ok} failed={failed}")
-    added_users = _refresh_similarity_pool(cfg, username, sample_count=10)
+    ok, failed = _refresh_similar_users(cfg, username, similar_users)
+    console.print(
+        f"Refresh active similar users complete: ok={ok} failed={failed} "
+        f"(limit={similar_users})"
+    )
+    added_users = _refresh_similarity_pool(
+        cfg,
+        username,
+        sample_count=new_users,
+        base_user_limit=similar_users,
+    )
     if added_users:
         console.print(f"Similarity pool: added={len(added_users)} -> {', '.join(added_users)}")
     else:
         console.print("Similarity pool: added=0")
-    updated, skipped = _update_top_availability(cfg, username=username, top_n=top_n)
+    updated, skipped = _update_top_availability(
+        cfg,
+        username=username,
+        top_n=top_n,
+        similar_user_limit=similar_users,
+    )
     console.print(
         f"Availability update complete: updated={updated} skipped_without_slug={skipped}"
     )
-    _export_html(username=username, limit=500, out="docs/index.html")
+    _export_html(
+        username=username,
+        limit=500,
+        out="docs/index.html",
+        similar_user_limit=similar_users,
+    )
 
 
 @app.command()
@@ -303,13 +370,19 @@ def recommend(
     limit: int = 50,
     explain_top: int = 0,
     contributors: int = 5,
+    similar_users: int | None = 100,
 ) -> None:
     """Generate recommendations for a user."""
     cfg = load_config()
     ensure_db(cfg.database_path)
     console.print(f"Recommending for: {username} (sort={sort})")
     if social_only:
-        results = _base_recommendations(cfg, username, sort=sort)
+        results = _base_recommendations(
+            cfg,
+            username,
+            sort=sort,
+            similar_user_limit=similar_users,
+        )
         display_rank = 0
         genre_filter = genre.lower() if genre else None
         provider_column = provider_column_from_arg(provider) if provider else None
@@ -454,15 +527,31 @@ def export_html(
     username: str,
     limit: int = 500,
     out: str = "docs/index.html",
+    similar_users: int | None = 100,
 ) -> None:
     """Export static HTML recommendations for GitHub Pages."""
-    _export_html(username=username, limit=limit, out=out)
+    _export_html(
+        username=username,
+        limit=limit,
+        out=out,
+        similar_user_limit=similar_users,
+    )
 
 
-def _export_html(username: str, limit: int, out: str) -> None:
+def _export_html(
+    username: str,
+    limit: int,
+    out: str,
+    similar_user_limit: int | None = 100,
+) -> None:
     cfg = load_config()
     ensure_db(cfg.database_path)
-    results = _base_recommendations(cfg, username, sort="desc")
+    results = _base_recommendations(
+        cfg,
+        username,
+        sort="desc",
+        similar_user_limit=similar_user_limit,
+    )
     if not results:
         console.print("[yellow]No recommendations to export.[/yellow]")
         return
@@ -505,6 +594,7 @@ def _refresh_similarity_pool(
     cfg,
     username: str,
     sample_count: int = 10,
+    base_user_limit: int | None = None,
 ) -> list[str]:
     scores = compute_similarity_scores(
         cfg.database_path,
@@ -515,7 +605,7 @@ def _refresh_similarity_pool(
     if not scores:
         return []
 
-    remaining = list(scores)
+    remaining = list(scores[:base_user_limit] if base_user_limit is not None else scores)
     if not remaining:
         return []
 

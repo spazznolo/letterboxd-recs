@@ -7,6 +7,8 @@ cd "$REPO_ROOT"
 USERNAME="${1:-spazznolo}"
 TOP_N="${2:-100}"
 BRANCH="${3:-main}"
+SIMILAR_USERS="${4:-100}"
+NEW_USERS="${5:-20}"
 LOCK_FILE="${REPO_ROOT}/.weekly_publish.lock"
 
 if [[ -f "$LOCK_FILE" ]]; then
@@ -24,8 +26,12 @@ trap 'rm -f "$LOCK_FILE"' EXIT
 echo "[weekly_publish] Syncing origin/$BRANCH"
 /usr/bin/git -C "$REPO_ROOT" pull --ff-only origin "$BRANCH"
 
-echo "[weekly_publish] Running weekly pipeline for $USERNAME (top_n=$TOP_N)"
-/usr/bin/caffeinate -i .venv/bin/letterboxd-recs weekly --username "$USERNAME" --top-n "$TOP_N"
+echo "[weekly_publish] Running weekly pipeline for $USERNAME (top_n=$TOP_N similar_users=$SIMILAR_USERS new_users=$NEW_USERS)"
+/usr/bin/caffeinate -i .venv/bin/letterboxd-recs weekly \
+  --username "$USERNAME" \
+  --top-n "$TOP_N" \
+  --similar-users "$SIMILAR_USERS" \
+  --new-users "$NEW_USERS"
 
 # Reassert the repo root before git commands in case the long-running pipeline
 # leaves the shell in an invalid working directory state under launchd.

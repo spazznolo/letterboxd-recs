@@ -209,9 +209,21 @@ def select_missing_followees(
     return [row[0] for row in rows]
 
 
-def select_social_rows(conn: sqlite3.Connection, root_username: str):
+def select_social_rows(
+    conn: sqlite3.Connection,
+    root_username: str,
+    followee_ids: list[int] | None = None,
+):
+    followee_filter = ""
+    params: list[object] = [root_username, root_username]
+    if followee_ids is not None:
+        if not followee_ids:
+            return []
+        placeholders = ",".join("?" for _ in followee_ids)
+        followee_filter = f" AND i.user_id IN ({placeholders})"
+        params.extend(followee_ids)
     return conn.execute(
-        """
+        f"""
         SELECT
             f.id AS film_id,
             f.title AS title,
@@ -232,8 +244,9 @@ def select_social_rows(conn: sqlite3.Connection, root_username: str):
               WHERE user_id = (SELECT id FROM users WHERE username = ?)
                 AND watched = 1
           )
+          {followee_filter}
         """,
-        (root_username, root_username),
+        params,
     ).fetchall()
 
 
