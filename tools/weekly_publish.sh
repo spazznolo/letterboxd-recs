@@ -21,6 +21,9 @@ fi
 echo "$$" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 
+echo "[weekly_publish] Syncing origin/$BRANCH"
+/usr/bin/git -C "$REPO_ROOT" pull --ff-only origin "$BRANCH"
+
 echo "[weekly_publish] Running weekly pipeline for $USERNAME (top_n=$TOP_N)"
 /usr/bin/caffeinate -i .venv/bin/letterboxd-recs weekly --username "$USERNAME" --top-n "$TOP_N"
 
