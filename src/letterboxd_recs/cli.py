@@ -641,7 +641,7 @@ def _refresh_similarity_pool(
             ingest_user(
                 followee.username,
                 cfg,
-                refresh=False,
+                refresh=True,
                 include_diary=False,
                 include_films=True,
                 include_likes=False,
