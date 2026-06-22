@@ -155,6 +155,27 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         letter-spacing: 0.08em;
       }
 
+      .controls-row button {
+        appearance: none;
+        background: none;
+        border: 0;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        letter-spacing: inherit;
+        padding: 0;
+        text-align: left;
+        text-transform: inherit;
+      }
+
+      .controls-row button:hover {
+        color: var(--text);
+      }
+
+      .controls-row button.active {
+        color: var(--text);
+      }
+
       .controls-row select,
       .controls-row input {
         background: var(--panel);
@@ -263,8 +284,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <section class="content">
       <div class="grid" id="grid">
         <div class="controls-row">
-          <span>Rank</span>
-          <span>Movement</span>
+          <span><button id="sort-rank" type="button">Rank</button></span>
+          <span><button id="sort-movement" type="button">Movement</button></span>
           <span>Score</span>
           <span>Provider <select id="provider"></select></span>
           <span>Min Year <input id="minYear" type="number" placeholder="min" /></span>
@@ -295,9 +316,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         const genreSelect = document.getElementById("genre");
         const minYearInput = document.getElementById("minYear");
         const streamOnlyInput = document.getElementById("streamOnly");
+        const sortRankButton = document.getElementById("sort-rank");
+        const sortMovementButton = document.getElementById("sort-movement");
         const rows = document.getElementById("rows");
 
-        if (!providerSelect || !genreSelect || !minYearInput || !streamOnlyInput || !rows) return;
+        if (!providerSelect || !genreSelect || !minYearInput || !streamOnlyInput || !sortRankButton || !sortMovementButton || !rows) return;
+
+        let sortKey = "rank";
+        let sortDirection = "asc";
 
         const allGenres = new Set();
         data.films.forEach((film) => {
@@ -329,6 +355,34 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
           return `<span class="movement down">↓${Math.abs(Number(rankChange))}</span>`;
         };
 
+        const sortValue = (film, key, fallbackRank) => {
+          if (key === "rank") {
+            const currentRank = Number(film.current_rank);
+            return Number.isFinite(currentRank) ? currentRank : fallbackRank;
+          }
+          if (key === "movement") {
+            if (film.previous_rank === null || film.previous_rank === undefined) {
+              return Number.NEGATIVE_INFINITY;
+            }
+            const rankChange = Number(film.rank_change);
+            return Number.isFinite(rankChange) ? rankChange : 0;
+          }
+          return fallbackRank;
+        };
+
+        const updateSortButtons = () => {
+          const rankLabel = sortKey === "rank"
+            ? `Rank ${sortDirection === "asc" ? "↑" : "↓"}`
+            : "Rank";
+          const movementLabel = sortKey === "movement"
+            ? `Movement ${sortDirection === "asc" ? "↑" : "↓"}`
+            : "Movement";
+          sortRankButton.textContent = rankLabel;
+          sortMovementButton.textContent = movementLabel;
+          sortRankButton.classList.toggle("active", sortKey === "rank");
+          sortMovementButton.classList.toggle("active", sortKey === "movement");
+        };
+
         const render = () => {
           const provider = providerSelect.value;
           const genre = genreSelect.value;
@@ -343,9 +397,21 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             return true;
           });
 
-          rows.innerHTML = "";
+          const sorted = [...filtered].sort((left, right) => {
+            const leftIndex = data.films.indexOf(left) + 1;
+            const rightIndex = data.films.indexOf(right) + 1;
+            const leftValue = sortValue(left, sortKey, leftIndex);
+            const rightValue = sortValue(right, sortKey, rightIndex);
+            if (leftValue === rightValue) {
+              return leftIndex - rightIndex;
+            }
+            return sortDirection === "asc" ? leftValue - rightValue : rightValue - leftValue;
+          });
 
-          if (!filtered.length) {
+          rows.innerHTML = "";
+          updateSortButtons();
+
+          if (!sorted.length) {
             const empty = document.createElement("div");
             empty.className = "row";
             empty.innerHTML = '<span class="genres">No films match the current filters.</span>';
@@ -353,7 +419,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             return;
           }
 
-          filtered.forEach((film, idx) => {
+          sorted.forEach((film, idx) => {
             const row = document.createElement("div");
             row.className = "row";
             const genres = (film.genres || []).join(", ") || "Unknown";
@@ -362,11 +428,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               ? Number(film.score_scaled)
               : Number(film.score);
             const displayScore = Math.max(0, Math.min(10, Number.isFinite(normalizedScore) ? normalizedScore : 0));
+            const displayRank = Number.isFinite(Number(film.current_rank))
+              ? Number(film.current_rank)
+              : idx + 1;
             const titleHtml = film.letterboxd_url
               ? `<a class="title title-link" href="${film.letterboxd_url}" target="_blank" rel="noopener noreferrer">${film.title}</a>`
               : `<span class="title">${film.title}</span>`;
             row.innerHTML = `
-              <span>${idx + 1}</span>
+              <span>${displayRank}</span>
               <span>${formatMovement(film.rank_change, film.previous_rank)}</span>
               <span>${displayScore.toFixed(2)}</span>
               ${titleHtml}
@@ -382,6 +451,24 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         genreSelect.addEventListener("change", render);
         minYearInput.addEventListener("input", render);
         streamOnlyInput.addEventListener("change", render);
+        sortRankButton.addEventListener("click", () => {
+          if (sortKey === "rank") {
+            sortDirection = sortDirection === "asc" ? "desc" : "asc";
+          } else {
+            sortKey = "rank";
+            sortDirection = "asc";
+          }
+          render();
+        });
+        sortMovementButton.addEventListener("click", () => {
+          if (sortKey === "movement") {
+            sortDirection = sortDirection === "asc" ? "desc" : "asc";
+          } else {
+            sortKey = "movement";
+            sortDirection = "desc";
+          }
+          render();
+        });
 
         render();
       });

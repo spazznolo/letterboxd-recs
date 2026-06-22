@@ -125,3 +125,37 @@ def test_export_html_includes_movement_from_previous_publish(
     assert payload["films"][1]["rank_change"] == -1
     assert payload["films"][2]["previous_rank"] is None
     assert payload["films"][2]["rank_change"] is None
+
+
+def test_export_html_includes_sortable_rank_and_movement_controls(tmp_path) -> None:
+    out_path = tmp_path / "index.html"
+
+    cli.render_recs_html(
+        "spazznolo",
+        [
+            cli.ExportFilm(
+                title="Movie A",
+                year=2020,
+                genres=["Drama"],
+                score=1.0,
+                score_scaled=8.5,
+                letterboxd_url="https://letterboxd.com/film/movie-a/",
+                providers={"netflix": True},
+                stream=True,
+                current_rank=1,
+                previous_rank=3,
+                rank_change=2,
+            ),
+        ],
+        ["netflix"],
+        out_path,
+    )
+
+    html = out_path.read_text(encoding="utf-8")
+
+    assert 'id="sort-rank"' in html
+    assert 'id="sort-movement"' in html
+    assert 'let sortKey = "rank";' in html
+    assert 'let sortDirection = "asc";' in html
+    assert "sortKey === \"movement\"" in html
+    assert "sortDirection = sortDirection === \"asc\" ? \"desc\" : \"asc\";" in html
