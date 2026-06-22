@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,9 @@ class ExportFilm:
     letterboxd_url: str | None
     providers: dict[str, bool]
     stream: bool
+    current_rank: int | None = None
+    previous_rank: int | None = None
+    rank_change: int | None = None
 
 
 def render_recs_html(
@@ -35,6 +39,52 @@ def render_recs_html(
     html = _HTML_TEMPLATE.replace("/*__DATA__*/", data_json)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
+
+
+def load_previous_rankings(out_path: Path) -> dict[tuple[str, str], int]:
+    if not out_path.exists():
+        return {}
+    try:
+        html = out_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    match = re.search(
+        r'<script id="recs-data" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if match is None:
+        return {}
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return {}
+
+    rankings: dict[tuple[str, str], int] = {}
+    for idx, film in enumerate(payload.get("films", []), start=1):
+        key = film_identity_key(film)
+        if key is None or key in rankings:
+            continue
+        rankings[key] = idx
+    return rankings
+
+
+def film_identity_key(film: ExportFilm | dict[str, Any]) -> tuple[str, str] | None:
+    if isinstance(film, ExportFilm):
+        letterboxd_url = film.letterboxd_url
+        title = film.title
+        year = film.year
+    else:
+        letterboxd_url = film.get("letterboxd_url")
+        title = film.get("title")
+        year = film.get("year")
+
+    if isinstance(letterboxd_url, str) and letterboxd_url:
+        return ("url", letterboxd_url.rstrip("/"))
+    if isinstance(title, str) and title:
+        year_text = "" if year is None else str(year)
+        return ("title-year", f"{title.strip().lower()}::{year_text}")
+    return None
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
@@ -89,7 +139,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       .row,
       .controls-row {
         display: grid;
-        grid-template-columns: 62px 70px 1.6fr 86px 1.6fr 130px;
+        grid-template-columns: 62px 90px 70px 1.6fr 86px 1.6fr 130px;
         gap: 12px;
         align-items: center;
         padding: 10px 4px;
@@ -163,10 +213,29 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         color: var(--accent);
       }
 
+      .row .movement {
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .row .movement.up {
+        color: #7dd3a0;
+      }
+
+      .row .movement.down {
+        color: #f59e8b;
+      }
+
+      .row .movement.flat,
+      .row .movement.new {
+        color: var(--muted);
+      }
+
       @media (max-width: 900px) {
         .row,
         .controls-row {
-          grid-template-columns: 52px 64px 1.4fr 76px 1.2fr 90px;
+          grid-template-columns: 52px 82px 64px 1.4fr 76px 1.2fr 90px;
           font-size: 13px;
         }
         .controls-row input[type="number"] {
@@ -195,6 +264,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="grid" id="grid">
         <div class="controls-row">
           <span>Rank</span>
+          <span>Movement</span>
           <span>Score</span>
           <span>Provider <select id="provider"></select></span>
           <span>Min Year <input id="minYear" type="number" placeholder="min" /></span>
@@ -246,6 +316,19 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         addOption(genreSelect, "", "All");
         [...allGenres].sort().forEach((g) => addOption(genreSelect, g, g));
 
+        const formatMovement = (rankChange, previousRank) => {
+          if (previousRank === null || previousRank === undefined) {
+            return '<span class="movement new">NEW</span>';
+          }
+          if (!Number.isFinite(Number(rankChange)) || Number(rankChange) === 0) {
+            return '<span class="movement flat">-</span>';
+          }
+          if (Number(rankChange) > 0) {
+            return `<span class="movement up">↑${Number(rankChange)}</span>`;
+          }
+          return `<span class="movement down">↓${Math.abs(Number(rankChange))}</span>`;
+        };
+
         const render = () => {
           const provider = providerSelect.value;
           const genre = genreSelect.value;
@@ -284,6 +367,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
               : `<span class="title">${film.title}</span>`;
             row.innerHTML = `
               <span>${idx + 1}</span>
+              <span>${formatMovement(film.rank_change, film.previous_rank)}</span>
               <span>${displayScore.toFixed(2)}</span>
               ${titleHtml}
               <span>${film.year || "-"}</span>

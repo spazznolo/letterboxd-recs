@@ -14,7 +14,12 @@ from letterboxd_recs.availability import (
 from letterboxd_recs.config import load_config
 from letterboxd_recs.db import repo
 from letterboxd_recs.db.conn import ensure_db
-from letterboxd_recs.export.html import ExportFilm, render_recs_html
+from letterboxd_recs.export.html import (
+    ExportFilm,
+    film_identity_key,
+    load_previous_rankings,
+    render_recs_html,
+)
 from letterboxd_recs.ingest.letterboxd.browser import fetch_html as browser_fetch
 from letterboxd_recs.ingest.letterboxd.ingest import ingest_user
 from letterboxd_recs.ingest.letterboxd.social import parse_following_entries
@@ -556,6 +561,7 @@ def _export_html(
         console.print("[yellow]No recommendations to export.[/yellow]")
         return
     results = results[:limit]
+    previous_rankings = load_previous_rankings(Path(out))
     scaled_scores = _scaled_scores(results)
     film_ids = [item.film_id for item in results]
     provider_columns = list(CARED_PROVIDER_COLUMNS)
@@ -567,13 +573,24 @@ def _export_html(
             ["stream"] + provider_columns,
         )
     films: list[ExportFilm] = []
-    for item in results:
+    for current_rank, item in enumerate(results, start=1):
         slug = slug_map.get(item.film_id)
         letterboxd_url = f"https://letterboxd.com/film/{slug}/" if slug else None
         flags = availability.get(item.film_id, {})
         stream_flag = bool(flags.get("stream", False))
         provider_flags = {col: bool(flags.get(col, False)) for col in provider_columns}
         genres = [g.strip() for g in (item.genres or "").split(",") if g.strip()]
+        identity = film_identity_key(
+            {
+                "title": item.title,
+                "year": item.year,
+                "letterboxd_url": letterboxd_url,
+            }
+        )
+        previous_rank = previous_rankings.get(identity) if identity is not None else None
+        rank_change = (
+            previous_rank - current_rank if previous_rank is not None else None
+        )
         films.append(
             ExportFilm(
                 title=item.title,
@@ -584,6 +601,9 @@ def _export_html(
                 letterboxd_url=letterboxd_url,
                 providers=provider_flags,
                 stream=stream_flag,
+                current_rank=current_rank,
+                previous_rank=previous_rank,
+                rank_change=rank_change,
             )
         )
     render_recs_html(username, films, provider_columns, Path(out))
