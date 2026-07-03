@@ -1,7 +1,7 @@
 from letterboxd_recs.config import SocialNormalizeConfig, SocialRatingsConfig, SocialSimilarityConfig
 from letterboxd_recs.db import repo
 from letterboxd_recs.db.conn import ensure_db
-from letterboxd_recs.models.social_simple import SocialWeights, compute_social_scores
+from letterboxd_recs.models.social_simple import SocialWeights, _time_weight, compute_social_scores
 
 
 def test_social_scores_can_limit_to_top_similar_users(tmp_path) -> None:
@@ -43,6 +43,16 @@ def test_social_scores_can_limit_to_top_similar_users(tmp_path) -> None:
     titles = [item.title for item in results]
     assert "Stronger Only" in titles
     assert "Weaker Only" not in titles
+
+
+def test_time_weight_boosts_current_and_previous_year_titles() -> None:
+    current = _time_weight(2026, current_year=2026, min_weight=0.25, window_years=25)
+    previous = _time_weight(2025, current_year=2026, min_weight=0.25, window_years=25)
+    older = _time_weight(2024, current_year=2026, min_weight=0.25, window_years=25)
+
+    assert current == 1.5
+    assert round(previous, 6) == round((0.5 ** (1 / 25)) * 1.5, 6)
+    assert round(older, 6) == round(0.5 ** (2 / 25), 6)
 
 
 def _film(

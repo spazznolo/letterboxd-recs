@@ -356,7 +356,7 @@ def weekly(
     )
     _export_html(
         username=username,
-        limit=500,
+        limit=5000,
         out="docs/index.html",
         similar_user_limit=similar_users,
     )
@@ -530,7 +530,7 @@ def recommend(
 @app.command()
 def export_html(
     username: str,
-    limit: int = 500,
+    limit: int = 5000,
     out: str = "docs/index.html",
     similar_users: int | None = 100,
 ) -> None:
@@ -562,7 +562,6 @@ def _export_html(
         return
     results = results[:limit]
     previous_rankings = load_previous_rankings(Path(out))
-    scaled_scores = _scaled_scores(results)
     film_ids = [item.film_id for item in results]
     provider_columns = list(CARED_PROVIDER_COLUMNS)
     with repo.connect(cfg.database_path) as conn:
@@ -597,7 +596,7 @@ def _export_html(
                 year=item.year,
                 genres=genres,
                 score=item.score,
-                score_scaled=scaled_scores.get(item.film_id, 0.0),
+                score_scaled=item.score,
                 letterboxd_url=letterboxd_url,
                 providers=provider_flags,
                 stream=stream_flag,

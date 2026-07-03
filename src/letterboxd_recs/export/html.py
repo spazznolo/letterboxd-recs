@@ -424,10 +424,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
             row.className = "row";
             const genres = (film.genres || []).join(", ") || "Unknown";
             const availability = film.stream ? "stream" : "rent";
-            const normalizedScore = Number.isFinite(Number(film.score_scaled))
+            const rawScore = Number.isFinite(Number(film.score_scaled))
               ? Number(film.score_scaled)
               : Number(film.score);
-            const displayScore = Math.max(0, Math.min(10, Number.isFinite(normalizedScore) ? normalizedScore : 0));
+            const displayScore = Number.isFinite(rawScore) ? rawScore : 0;
             const displayRank = Number.isFinite(Number(film.current_rank))
               ? Number(film.current_rank)
               : idx + 1;

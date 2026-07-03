@@ -788,11 +788,15 @@ def _time_weight(
 ) -> float:
     if year is None:
         return 0.75
+    recent_release_threshold = current_year - 1
+    recent_release_multiplier = 1.5
     if year >= current_year:
-        return 1.0
+        return 1.0 * recent_release_multiplier
     age_years = max(0, current_year - year)
     half_life = max(window_years, 1)
     weight = 0.5 ** (age_years / half_life)
+    if year >= recent_release_threshold:
+        weight *= recent_release_multiplier
     return max(min_weight, weight)
 
 
