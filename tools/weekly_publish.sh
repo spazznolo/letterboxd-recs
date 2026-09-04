@@ -9,6 +9,9 @@ TOP_N="${2:-100}"
 BRANCH="${3:-main}"
 SIMILAR_USERS="${4:-100}"
 NEW_USERS="${5:-20}"
+BLOG_REPO="${BLOG_REPO:-/Users/jspagnolo/Documents/GitHub/spazznolo.github.io}"
+BLOG_BRANCH="${BLOG_BRANCH:-master}"
+BLOG_ASSET="${BLOG_REPO}/assets/data/letterboxd-recs.html"
 LOCK_FILE="${REPO_ROOT}/.weekly_publish.lock"
 
 if [[ -f "$LOCK_FILE" ]]; then
@@ -44,11 +47,26 @@ fi
 
 if /usr/bin/git -C "$REPO_ROOT" diff --quiet -- docs/index.html; then
   echo "[weekly_publish] No docs/index.html changes to publish"
-  exit 0
+else
+  /usr/bin/git -C "$REPO_ROOT" add docs/index.html
+  /usr/bin/git -C "$REPO_ROOT" commit -m "Update recommendations page ($(date +%Y-%m-%d))"
+  /usr/bin/git -C "$REPO_ROOT" push origin "$BRANCH"
+  echo "[weekly_publish] Published docs/index.html to origin/$BRANCH"
 fi
 
-/usr/bin/git -C "$REPO_ROOT" add docs/index.html
-/usr/bin/git -C "$REPO_ROOT" commit -m "Update recommendations page ($(date +%Y-%m-%d))"
-/usr/bin/git -C "$REPO_ROOT" push origin "$BRANCH"
+if [[ ! -d "$BLOG_REPO/.git" ]]; then
+  echo "[weekly_publish] Blog repo not found: $BLOG_REPO"
+  exit 1
+fi
 
-echo "[weekly_publish] Published docs/index.html to origin/$BRANCH"
+/usr/bin/git -C "$BLOG_REPO" pull --ff-only origin "$BLOG_BRANCH"
+
+if [[ ! -f "$BLOG_ASSET" ]] || ! /usr/bin/cmp -s docs/index.html "$BLOG_ASSET"; then
+  /bin/cp docs/index.html "$BLOG_ASSET"
+  /usr/bin/git -C "$BLOG_REPO" add assets/data/letterboxd-recs.html
+  /usr/bin/git -C "$BLOG_REPO" commit -m "Update Letterboxd recommendations ($(date +%Y-%m-%d))"
+  /usr/bin/git -C "$BLOG_REPO" push origin "$BLOG_BRANCH"
+  echo "[weekly_publish] Published Letterboxd recommendations to blog origin/$BLOG_BRANCH"
+else
+  echo "[weekly_publish] No blog recommendation changes to publish"
+fi
