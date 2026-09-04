@@ -11,7 +11,7 @@ SIMILAR_USERS="${4:-100}"
 NEW_USERS="${5:-20}"
 BLOG_REPO="${BLOG_REPO:-/Users/jspagnolo/Documents/GitHub/spazznolo.github.io}"
 BLOG_BRANCH="${BLOG_BRANCH:-master}"
-BLOG_ASSET="${BLOG_REPO}/assets/data/letterboxd-recs.html"
+BLOG_ASSET="${BLOG_REPO}/assets/data/letterboxd-recs-feed.txt"
 LOCK_FILE="${REPO_ROOT}/.weekly_publish.lock"
 
 if [[ -f "$LOCK_FILE" ]]; then
@@ -57,7 +57,7 @@ fi
 if /usr/bin/git -C "$BLOG_REPO" diff --quiet -- assets/data/letterboxd-recs.html; then
   echo "[weekly_publish] No blog recommendation changes to publish"
 else
-  /usr/bin/git -C "$BLOG_REPO" add assets/data/letterboxd-recs.html
+  /usr/bin/git -C "$BLOG_REPO" add assets/data/letterboxd-recs-feed.txt
   /usr/bin/git -C "$BLOG_REPO" commit -m "Update Letterboxd recommendations ($(date +%Y-%m-%d))"
   /usr/bin/git -C "$BLOG_REPO" push origin "$BLOG_BRANCH"
   echo "[weekly_publish] Published Letterboxd recommendations to blog origin/$BLOG_BRANCH"
