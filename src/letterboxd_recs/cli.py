@@ -2,6 +2,7 @@ from pathlib import Path
 
 import math
 import random
+import sqlite3
 import typer
 from rich.console import Console
 
@@ -326,6 +327,7 @@ def weekly(
     top_n: int = 100,
     new_users: int = 20,
     similar_users: int = 100,
+    out: str = "docs/index.html",
 ) -> None:
     """Weekly pipeline: refresh similar users, discover users, update availability."""
     cfg = load_config()
@@ -357,7 +359,7 @@ def weekly(
     _export_html(
         username=username,
         limit=5000,
-        out="docs/index.html",
+        out=out,
         similar_user_limit=similar_users,
     )
 
@@ -642,20 +644,15 @@ def _refresh_similarity_pool(
         followee = _random_followee(base.username, cfg)
         if not followee:
             continue
-        with repo.connect(cfg.database_path) as conn:
-            if repo.select_user_id(conn, followee.username):
-                continue
-            src_id = repo.ensure_user(conn, base.username)
-            dst_id = repo.upsert_user_stats(
-                conn,
-                followee.username,
-                followee.display_name,
-                followee.followers,
-                followee.following,
-                followee.watched,
+        try:
+            already_known = _record_similarity_followee(cfg, base.username, followee)
+        except sqlite3.OperationalError as exc:
+            console.print(
+                f"[yellow]Skipping followee metadata write for {followee.username}: {exc}[/yellow]"
             )
-            repo.upsert_graph_edge(conn, src_id, dst_id, 1)
-            conn.commit()
+            continue
+        if already_known:
+            continue
         try:
             ingest_user(
                 followee.username,
@@ -672,6 +669,34 @@ def _refresh_similarity_pool(
             console.print(f"[yellow]Failed ingest for {followee.username}: {exc}[/yellow]")
 
     return added_usernames
+
+
+def _record_similarity_followee(cfg, base_username: str, followee) -> bool:
+    for attempt in range(1, 4):
+        try:
+            with repo.connect(cfg.database_path) as conn:
+                if repo.select_user_id(conn, followee.username):
+                    return True
+                src_id = repo.ensure_user(conn, base_username)
+                dst_id = repo.upsert_user_stats(
+                    conn,
+                    followee.username,
+                    followee.display_name,
+                    followee.followers,
+                    followee.following,
+                    followee.watched,
+                )
+                repo.upsert_graph_edge(conn, src_id, dst_id, 1)
+                conn.commit()
+                return False
+        except sqlite3.OperationalError as exc:
+            if "database is locked" not in str(exc).lower() or attempt == 3:
+                raise
+            console.print(
+                f"[yellow]Retry {attempt} for similarity-pool DB write ({followee.username}): "
+                f"{exc}[/yellow]"
+            )
+    return False
 
 
 def _random_followee(username: str, cfg):

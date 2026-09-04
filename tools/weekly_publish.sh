@@ -26,6 +26,14 @@ fi
 echo "$$" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 
+if [[ ! -d "$BLOG_REPO/.git" ]]; then
+  echo "[weekly_publish] Blog repo not found: $BLOG_REPO"
+  exit 1
+fi
+
+echo "[weekly_publish] Syncing blog origin/$BLOG_BRANCH"
+/usr/bin/git -C "$BLOG_REPO" pull --ff-only origin "$BLOG_BRANCH"
+
 echo "[weekly_publish] Syncing origin/$BRANCH"
 /usr/bin/git -C "$REPO_ROOT" pull --ff-only origin "$BRANCH"
 
@@ -34,39 +42,23 @@ echo "[weekly_publish] Running weekly pipeline for $USERNAME (top_n=$TOP_N simil
   --username "$USERNAME" \
   --top-n "$TOP_N" \
   --similar-users "$SIMILAR_USERS" \
-  --new-users "$NEW_USERS"
+  --new-users "$NEW_USERS" \
+  --out "$BLOG_ASSET"
 
 # Reassert the repo root before git commands in case the long-running pipeline
 # leaves the shell in an invalid working directory state under launchd.
 cd "$REPO_ROOT"
 
-if [[ ! -f docs/index.html ]]; then
-  echo "[weekly_publish] docs/index.html not found after weekly run"
+if [[ ! -f "$BLOG_ASSET" ]]; then
+  echo "[weekly_publish] Blog recommendation page not found after weekly run"
   exit 1
 fi
 
-if /usr/bin/git -C "$REPO_ROOT" diff --quiet -- docs/index.html; then
-  echo "[weekly_publish] No docs/index.html changes to publish"
+if /usr/bin/git -C "$BLOG_REPO" diff --quiet -- assets/data/letterboxd-recs.html; then
+  echo "[weekly_publish] No blog recommendation changes to publish"
 else
-  /usr/bin/git -C "$REPO_ROOT" add docs/index.html
-  /usr/bin/git -C "$REPO_ROOT" commit -m "Update recommendations page ($(date +%Y-%m-%d))"
-  /usr/bin/git -C "$REPO_ROOT" push origin "$BRANCH"
-  echo "[weekly_publish] Published docs/index.html to origin/$BRANCH"
-fi
-
-if [[ ! -d "$BLOG_REPO/.git" ]]; then
-  echo "[weekly_publish] Blog repo not found: $BLOG_REPO"
-  exit 1
-fi
-
-/usr/bin/git -C "$BLOG_REPO" pull --ff-only origin "$BLOG_BRANCH"
-
-if [[ ! -f "$BLOG_ASSET" ]] || ! /usr/bin/cmp -s docs/index.html "$BLOG_ASSET"; then
-  /bin/cp docs/index.html "$BLOG_ASSET"
   /usr/bin/git -C "$BLOG_REPO" add assets/data/letterboxd-recs.html
   /usr/bin/git -C "$BLOG_REPO" commit -m "Update Letterboxd recommendations ($(date +%Y-%m-%d))"
   /usr/bin/git -C "$BLOG_REPO" push origin "$BLOG_BRANCH"
   echo "[weekly_publish] Published Letterboxd recommendations to blog origin/$BLOG_BRANCH"
-else
-  echo "[weekly_publish] No blog recommendation changes to publish"
 fi
