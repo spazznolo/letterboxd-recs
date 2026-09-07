@@ -54,7 +54,7 @@ if [[ ! -f "$BLOG_ASSET" ]]; then
   exit 1
 fi
 
-if /usr/bin/git -C "$BLOG_REPO" diff --quiet -- assets/data/letterboxd-recs.html; then
+if /usr/bin/git -C "$BLOG_REPO" diff --quiet -- assets/data/letterboxd-recs-feed.txt; then
   echo "[weekly_publish] No blog recommendation changes to publish"
 else
   /usr/bin/git -C "$BLOG_REPO" add assets/data/letterboxd-recs-feed.txt

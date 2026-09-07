@@ -38,17 +38,21 @@ def ingest_follow_graph(
     client = LetterboxdClient(cfg.app.user_agent, cfg.scrape, cache_dir)
 
     with repo.connect(cfg.database_path) as conn:
-        root_id = repo.ensure_user(conn, username)
-        visited: set[str] = {username}
-        edges_added = 0
+        repo.ensure_user(conn, username)
+        conn.commit()
 
-        queue: deque[tuple[str, int]] = deque([(username, 0)])
-        while queue:
-            current, depth = queue.popleft()
-            if depth >= depth_limit:
-                continue
+    visited: set[str] = {username}
+    edges_added = 0
+    queue: deque[tuple[str, int]] = deque([(username, 0)])
+    while queue:
+        current, depth = queue.popleft()
+        if depth >= depth_limit:
+            continue
 
-            followees = _collect_followees(current, client, refresh)
+        followees = _collect_followees(current, client, refresh)
+        pending_ingests: list[str] = []
+        with repo.connect(cfg.database_path) as conn:
+            src_id = repo.ensure_user(conn, current)
             for followee in followees:
                 if not _passes_filters(followee):
                     continue
@@ -57,12 +61,8 @@ def ingest_follow_graph(
                     visited.add(followee.username)
                     queue.append((followee.username, depth + 1))
                     if ingest_interactions:
-                        try:
-                            ingest_user(followee.username, cfg, refresh=False)
-                        except Exception as exc:  # noqa: BLE001
-                            LOG.warning("Failed ingest for %s: %s", followee.username, exc)
+                        pending_ingests.append(followee.username)
 
-                src_id = repo.ensure_user(conn, current)
                 dst_id = repo.upsert_user_stats(
                     conn,
                     followee.username,
@@ -75,6 +75,12 @@ def ingest_follow_graph(
                 edges_added += 1
 
             conn.commit()
+
+        for followee_username in pending_ingests:
+            try:
+                ingest_user(followee_username, cfg, refresh=False)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Failed ingest for %s: %s", followee_username, exc)
 
     return GraphIngestResult(username=username, nodes=len(visited), edges=edges_added)
 
