@@ -49,6 +49,14 @@ echo "[weekly_publish] Running weekly pipeline for $USERNAME (top_n=$TOP_N simil
 # leaves the shell in an invalid working directory state under launchd.
 cd "$REPO_ROOT"
 
+.venv/bin/letterboxd-recs export-html "$USERNAME" \
+  --limit 5000 --out docs/index.html --similar-users "$SIMILAR_USERS"
+/usr/bin/git -C "$REPO_ROOT" add -- docs/index.html
+if ! /usr/bin/git -C "$REPO_ROOT" diff --cached --quiet -- docs/index.html; then
+  /usr/bin/git -C "$REPO_ROOT" commit --only -m "Update recommendations page ($(date +%Y-%m-%d))" -- docs/index.html
+fi
+/usr/bin/git -C "$REPO_ROOT" push origin "$BRANCH"
+
 if [[ ! -f "$BLOG_ASSET" ]]; then
   echo "[weekly_publish] Blog recommendation page not found after weekly run"
   exit 1
